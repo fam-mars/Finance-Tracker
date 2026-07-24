@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "title": "Financieel Overzicht 2.0",
+    "currency": "EUR",
+    "locale": "nl-NL",
+    "sourceFile": "Financieel_Overzicht_2_0.xlsx",
+    "exportedAt": "2026-07-24"
+  },
+  "incomes": [
+    {
+      "id": "inc-1",
+      "source": "Salaris 1",
+      "amountPerMonth": 2750.0,
+      "note": "pas de naam aan"
+    },
+    {
+      "id": "inc-2",
+      "source": "Salaris 2",
+      "amountPerMonth": 3300.0,
+      "note": "pas de naam aan"
+    },
+    {
+      "id": "inc-3",
+      "source": "KM-vergoeding",
+      "amountPerMonth": 108.0,
+      "note": ""
+    },
+    {
+      "id": "inc-4",
+      "source": "Vakantiegeld / 13e maand",
+      "amountPerMonth": 0.0,
+      "note": "eenmalig? vul het bedrag in bij Maandoverzicht in de juiste maand"
+    },
+    {
+      "id": "inc-5",
+      "source": "Overig",
+      "amountPerMonth": 0.0,
+      "note": ""
+    }
+  ],
+  "fixedExpenses": [
+    {
+      "id": "fx-1",
+      "payDay": 1,
+      "description": "Rabo kosten",
+      "category": "Bankkosten",
+      "tag": "V",
+      "amountPerMonth": 4.95
+    },
+    {
+      "id": "fx-2",
+      "payDay": 2,
+      "description": "Amex CC",
+      "category": "Bankkosten",
+      "tag": "V",
+      "amountPerMonth": 20.0
+    },
+    {
+      "id": "fx-3",
+      "payDay": 4,
+      "description": "PB",
+      "category": "Persoonlijk",
+      "tag": "V",
+      "amountPerMonth": 400.0
+    },
+    {
+      "id": "fx-4",
+      "payDay": 5,
+      "description": "Boodschappen",
+      "category": "Boodschappen",
+      "tag": "V",
+      "amountPerMonth": 500.0
+    },
+    {
+      "id": "fx-5",
+      "payDay": 7,
+      "description": "Centraal Beheer Overlijdensverzekering",
+      "category": "Verzekeringen",
+      "tag": "",
+      "amountPerMonth": 21.47
+    },
+    {
+      "id": "fx-6",
+      "payDay": 10,
+      "description": "Odido Mobiel 1",
+      "category": "Telecom",
+      "tag": "V THIJS",
+      "amountPerMonth": 56.5
+    },
+    {
+      "id": "fx-7",
+      "payDay": 11,
+      "description": "Rheinland inkomensverzekering",
+      "category": "Verzekeringen",
+      "tag": "",
+      "amountPerMonth": 30.42
+    },
+    {
+      "id": "fx-8",
+      "payDay": 12,
+      "description": "Analyn schoon",
+      "category": "Huishouden",
+      "tag": "",
+      "amountPerMonth": 120.0
+    },
+    {
+      "id": "fx-9",
+      "payDay": 13,
+      "description": "Bookbeat",
+      "category": "Abonnementen",
+      "tag": "",
+      "amountPerMonth": 10.98
+    },
+    {
+      "id": "fx-10",
+      "payDay": 14,
+      "description": "Odido Mobiel 2",
+      "category": "Telecom",
+      "tag": "",
+      "amountPerMonth": 56.5
+    },
+    {
+      "id": "fx-11",
+      "payDay": 15,
+      "description": "CZ Zorgverzekering",
+      "category": "Verzekeringen",
+      "tag": "",
+      "amountPerMonth": 140.5
+    },
+    {
+      "id": "fx-12",
+      "payDay": null,
+      "description": "Renteaftrek hypotheek (teruggave)",
+      "category": "Wonen",
+      "tag": "",
+      "amountPerMonth": -648.0
+    },
+    {
+      "id": "fx-13",
+      "payDay": null,
+      "description": "PayPal JFH-Solutions",
+      "category": "Abonnementen",
+      "tag": "V",
+      "amountPerMonth": 9.8
+    },
+    {
+      "id": "fx-14",
+      "payDay": 25,
+      "description": "DUO studieschuld",
+      "category": "Aflossingen",
+      "tag": "V THIJS",
+      "amountPerMonth": 218.56
+    },
+    {
+      "id": "fx-15",
+      "payDay": null,
+      "description": "Keuken",
+      "category": "Wonen",
+      "tag": "",
+      "amountPerMonth": 200.0
+    },
+    {
+      "id": "fx-16",
+      "payDay": 27,
+      "description": "Vitens",
+      "category": "Nutsvoorzieningen",
+      "tag": "V",
+      "amountPerMonth": 21.0
+    },
+    {
+      "id": "fx-17",
+      "payDay": 28,
+      "description": "Odido Internet",
+      "category": "Telecom",
+      "tag": "V",
+      "amountPerMonth": 42.87
+    },
+    {
+      "id": "fx-18",
+      "payDay": null,
+      "description": "CZ Zorgverzekering (Thijs)",
+      "category": "Verzekeringen",
+      "tag": "V THIJS",
+      "amountPerMonth": 163.0
+    },
+    {
+      "id": "fx-19",
+      "payDay": 29,
+      "description": "ASR Hypotheek",
+      "category": "Wonen",
+      "tag": "",
+      "amountPerMonth": 2327.42
+    },
+    {
+      "id": "fx-20",
+      "payDay": 30,
+      "description": "Allianz Inboedel",
+      "category": "Verzekeringen",
+      "tag": "V",
+      "amountPerMonth": 38.52
+    },
+    {
+      "id": "fx-21",
+      "payDay": null,
+      "description": "Budget Energie",
+      "category": "Nutsvoorzieningen",
+      "tag": "V",
+      "amountPerMonth": 220.0
+    }
+  ],
+  "monthOverview": {
+    "year": 2026,
+    "variableExpenses": [
+      {
+        "id": "var-1",
+        "category": "Uit eten & bezorgen",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      },
+      {
+        "id": "var-2",
+        "category": "Vervoer & brandstof",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      },
+      {
+        "id": "var-3",
+        "category": "Kleding & verzorging",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      },
+      {
+        "id": "var-4",
+        "category": "Vakantie & uitjes",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      },
+      {
+        "id": "var-5",
+        "category": "Cadeaus & feestdagen",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      },
+      {
+        "id": "var-6",
+        "category": "Overige uitgaven",
+        "budgetPerMonth": null,
+        "actuals": {
+          "jan": null,
+          "feb": null,
+          "mrt": null,
+          "apr": null,
+          "mei": null,
+          "jun": null,
+          "jul": null,
+          "aug": null,
+          "sep": null,
+          "okt": null,
+          "nov": null,
+          "dec": null
+        }
+      }
+    ]
+  },
+  "portfolio": {
+    "holdings": [
+      {
+        "id": "h-1",
+        "platform": "Bitvavo",
+        "name": "Bitcoin",
+        "ticker": "BTC",
+        "quantity": null,
+        "avgBuyPrice": null,
+        "currentPrice": null
+      },
+      {
+        "id": "h-2",
+        "platform": "Bitvavo",
+        "name": "Ethereum",
+        "ticker": "ETH",
+        "quantity": null,
+        "avgBuyPrice": null,
+        "currentPrice": null
+      },
+      {
+        "id": "h-3",
+        "platform": "Degiro",
+        "name": "Vanguard S&P 500 UCITS ETF",
+        "ticker": "VUSA",
+        "quantity": 12.0,
+        "avgBuyPrice": 95.0,
+        "currentPrice": 108.5
+      },
+      {
+        "id": "h-4",
+        "platform": "Degiro",
+        "name": "iShares Core MSCI World",
+        "ticker": "IWDA",
+        "quantity": null,
+        "avgBuyPrice": null,
+        "currentPrice": null
+      }
+    ],
+    "monthlyContributions": [
+      {
+        "id": "c-1",
+        "target": "Bitvavo — Bitcoin",
+        "amountPerMonth": 250.0,
+        "note": ""
+      },
+      {
+        "id": "c-2",
+        "target": "Bitvavo — Ethereum",
+        "amountPerMonth": 250.0,
+        "note": ""
+      },
+      {
+        "id": "c-3",
+        "target": "Degiro — ETF's, S&P 500 & trackers",
+        "amountPerMonth": 500.0,
+        "note": ""
+      }
+    ]
+  },
+  "forecast": {
+    "startValueOverride": null,
+    "monthlyContributionOverride": null,
+    "expectedReturnPerYear": 0.07,
+    "inflationPerYear": 0.02,
+    "horizonYears": 20
+  },
+  "mortgage": {
+    "homeMarketValue": 575000.0,
+    "purchasePrice": 540000.0,
+    "principalRemaining": 500000.0,
+    "interestRatePerYear": 0.038,
+    "remainingTermYears": 30,
+    "firstPaymentMonth": "2026-08",
+    "extraRepaymentPerMonth": 0.0,
+    "monthlyPaymentOverride": 2329.79,
+    "interestDeductionPerMonth": 648.0
+  },
+  "debts": [
+    {
+      "id": "d-1",
+      "description": "Hypotheek woning",
+      "lender": "ASR",
+      "owner": "Samen",
+      "principalRemaining": 500000.0,
+      "interestRatePerYear": 0.038,
+      "monthlyPayment": 2329.79,
+      "linkedToMortgage": true,
+      "note": "automatisch uit tabblad Hypotheek & Woning",
+      "remainingTermMonths": 360
+    },
+    {
+      "id": "d-2",
+      "description": "Studieschuld DUO",
+      "lender": "DUO",
+      "owner": "Thijs",
+      "principalRemaining": 14500.0,
+      "interestRatePerYear": 0.0256,
+      "monthlyPayment": 218.56,
+      "linkedToMortgage": false,
+      "note": "voorbeeldsaldo & -rente — check mijn.duo.nl",
+      "remainingTermMonths": 72
+    }
+  ],
+  "netWorth": {
+    "manualAssets": {
+      "checkingAccounts": null,
+      "savingsAccounts": null,
+      "otherAssets": null
+    },
+    "snapshots": [
+      {
+        "date": "2026-07-24",
+        "netWorth": 61802.0
+      }
+    ]
+  },
+  "savingsGoals": [
+    {
+      "id": "g-1",
+      "name": "Noodfonds (buffer)",
+      "targetAmount": null,
+      "savedSoFar": null,
+      "contributionPerMonth": null,
+      "isEmergencyFund": true
+    },
+    {
+      "id": "g-2",
+      "name": "Vakantie 2027",
+      "targetAmount": 3000.0,
+      "savedSoFar": 1200.0,
+      "contributionPerMonth": 300.0,
+      "isEmergencyFund": false
+    }
+  ],
+  "mutualLoans": []
+}

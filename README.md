@@ -1,86 +1,38 @@
-# Finance Tracker
+# Financieel Overzicht — app bundle
 
-A comprehensive finance tracking application built with Node.js and Vercel.
+This bundle turns `Financieel_Overzicht_2_0.xlsx` into a mobile-first web app:
 
-## Getting Started
+- **Frontend**: React + Vite + TypeScript, deployed on **Vercel**. Stateless — it holds the document in memory for the session only and syncs via full GET/PUT.
+- **Backend**: **.NET 8 minimal API** on your VPS. Stores the spreadsheet's *input values* as one JSON document with revisions, atomic writes and rolling backups.
+- **Data**: `backend/data/seed.json` — every prefilled input value extracted from the workbook. All spreadsheet *formulas* are ported to pure TypeScript in `frontend/src/domain/calc.ts` and verified against the workbook's computed values (spaarquote 19,5%, annuity €2.329,79, prognose €526.185, LTV 87%, netto woonlast €1.681,79, netto vermogen €61.802 — all match).
 
-### Prerequisites
+## Layout
 
-- Node.js 20.x or higher
-- npm or yarn
-- Vercel account (for deployment)
+```
+backend/    .NET 8 API (complete, compile-ready — no build ran here; run `dotnet build`)
+frontend/   React app (typechecked + production build verified)
+docs/
+  ARCHITECTURE.md   system design & sync model
+  API-CONTRACT.md   REST contract, headers, error shapes
+  UX-UI-SPEC.md     design system, IA, interaction rules
+  DEPLOYMENT.md     Vercel + VPS (systemd or Docker, nginx, HTTPS, CORS, API key)
+  AGENT-TASKS.md    prioritized backlog for coding agents
+```
 
-### Installation
+## Quick start (local)
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/fam-mars/Finance-Tracker.git
-cd Finance-Tracker
+# terminal 1 — backend (seeds itself from data/seed.json on first run)
+cd backend && dotnet run          # http://localhost:5080
+
+# terminal 2 — frontend (Vite proxies /api to :5080)
+cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+## The one rule to preserve
 
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
+**The backend stores inputs; the frontend derives everything.** The spreadsheet's blue/yellow cells became the JSON document; its black formula cells became `calc.ts`. Never store a derived number, and never compute in the backend — this keeps sync trivial (one document, one revision) and the math testable.
 
-### Development
+## Feeding this to coding agents
 
-Run the development server:
-```bash
-npm run dev
-```
-
-The API will be available at `http://localhost:3000`
-
-Check the health endpoint:
-```bash
-curl http://localhost:3000/api/health
-```
-
-### Testing
-
-Run the test suite:
-```bash
-npm test
-```
-
-## Deployment
-
-### Vercel
-
-This project is configured for automatic deployment to Vercel.
-
-1. Push to your branch
-2. Vercel will automatically build and deploy the application
-3. Access your deployed app at the provided Vercel URL
-
-For manual deployment:
-```bash
-npm i -g vercel
-vercel
-```
-
-## Project Structure
-
-```
-Finance-Tracker/
-├── api/              # API endpoints and server logic
-├── src/              # Application source code
-├── .env.example      # Environment variables template
-├── vercel.json       # Vercel configuration
-└── package.json      # Project dependencies
-```
-
-## Environment Variables
-
-See `.env.example` for required environment variables.
-
-## License
-
-MIT
+Give an agent this whole folder plus `docs/AGENT-TASKS.md`. Each task there is self-contained, references the exact files, and states its acceptance criteria. Start with T1 (backend build + smoke test) before anything else.

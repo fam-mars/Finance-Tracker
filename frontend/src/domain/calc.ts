@@ -1,0 +1,414 @@
+/**
+ * calc.ts — every formula from Financieel_Overzicht_2_0.xlsx, as pure functions.
+ *
+ * The backend stores inputs only; the UI derives everything below on render.
+ * All functions are pure and unit-testable. Percentages are fractions
+ * (0.038 = 3.8%). Money is in euros as plain numbers; format at the edge
+ * with formatEUR().
+ */
+
+import type {
+  Debt,
+  FinancialState,
+  ForecastAssumptions,
+  Holding,
+  MonthKey,
+  MortgageInputs,
+  SavingsGoal,
+} from "./types";
+import { MONTH_KEYS } from "./types";
+
+// ---------------------------------------------------------------- formatting
+
+const eur0 = new Intl.NumberFormat("nl-NL", {
+  style: "currency", currency: "EUR", maximumFractionDigits: 0,
+});
+const eur2 = new Intl.NumberFormat("nl-NL", {
+  style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+const pct1 = new Intl.NumberFormat("nl-NL", {
+  style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1,
+});
+
+export const formatEUR = (v: number, cents = false) => (cents ? eur2 : eur0).format(v);
+export const formatPct = (fraction: number) => pct1.format(fraction);
+
+// ---------------------------------------------------------------- cashflow
+
+/** Dashboard: INKOMSTEN P/M — sum of income sources. */
+export const totalIncomePerMonth = (s: FinancialState) =>
+  s.incomes.reduce((t, i) => t + i.amountPerMonth, 0);
+
+/** Dashboard: VASTE LASTEN P/M — sum incl. negative refund lines. */
+export const totalFixedExpensesPerMonth = (s: FinancialState) =>
+  s.fixedExpenses.reduce((t, e) => t + e.amountPerMonth, 0);
+
+/** Dashboard: BELEGGEN P/M — total planned monthly investment contribution. */
+export const totalInvestingPerMonth = (s: FinancialState) =>
+  s.portfolio.monthlyContributions.reduce((t, c) => t + c.amountPerMonth, 0);
+
+/** Dashboard: SPAARRUIMTE P/M = income − fixed − investing. */
+export const savingsRoomPerMonth = (s: FinancialState) =>
+  totalIncomePerMonth(s) - totalFixedExpensesPerMonth(s) - totalInvestingPerMonth(s);
+
+/** Dashboard: SPAARQUOTE = savings room / income (investing excluded, as in the sheet). */
+export function savingsRate(s: FinancialState): number {
+  const income = totalIncomePerMonth(s);
+  if (income <= 0) return 0;
+  return savingsRoomPerMonth(s) / income;
+}
+
+/** Dashboard: OPZIJ PER JAAR = 12 × (investing + savings room). */
+export const setAsidePerYear = (s: FinancialState) =>
+  12 * (totalInvestingPerMonth(s) + savingsRoomPerMonth(s));
+
+/** Fixed expenses grouped by category, sorted descending, incl. share of total. */
+export function fixedExpensesByCategory(s: FinancialState) {
+  const total = totalFixedExpensesPerMonth(s);
+  const map = new Map<string, number>();
+  for (const e of s.fixedExpenses) {
+    map.set(e.category || "Overig", (map.get(e.category || "Overig") ?? 0) + e.amountPerMonth);
+  }
+  return [...map.entries()]
+    .map(([category, perMonth]) => ({
+      category,
+      perMonth,
+      perYear: perMonth * 12,
+      share: total !== 0 ? perMonth / total : 0,
+    }))
+    .sort((a, b) => b.perMonth - a.perMonth);
+}
+
+// ---------------------------------------------------------------- month overview
+
+export interface MonthColumn {
+  month: MonthKey;
+  income: number;
+  fixed: number;
+  variable: number;
+  totalSpent: number;
+  invested: number;
+  saved: number;
+  savingsRate: number;
+  cumulativeSaved: number;
+}
+
+/** Maandoverzicht: per-month budget vs actuals, spaarquote and cumulative savings. */
+export function monthColumns(s: FinancialState): MonthColumn[] {
+  const income = totalIncomePerMonth(s);
+  const fixed = totalFixedExpensesPerMonth(s);
+  const invested = totalInvestingPerMonth(s);
+  let cumulative = 0;
+  return MONTH_KEYS.map((month) => {
+    const variable = s.monthOverview.variableExpenses.reduce(
+      (t, cat) => t + (cat.actuals[month] ?? 0), 0);
+    const totalSpent = fixed + variable;
+    const saved = income - totalSpent - invested;
+    cumulative += saved;
+    return {
+      month, income, fixed, variable, totalSpent, invested, saved,
+      savingsRate: income > 0 ? saved / income : 0,
+      cumulativeSaved: cumulative,
+    };
+  });
+}
+
+// ---------------------------------------------------------------- portfolio
+
+export interface HoldingDerived extends Holding {
+  invested: number;
+  value: number;
+  resultEur: number;
+  resultPct: number | null;
+  allocation: number;
+}
+
+/** Portefeuille: invested, value, result and allocation per holding. */
+export function portfolioDerived(s: FinancialState): {
+  holdings: HoldingDerived[];
+  totalInvested: number;
+  totalValue: number;
+  totalResultEur: number;
+  totalResultPct: number | null;
+} {
+  const base = s.portfolio.holdings.map((h) => {
+    const invested = (h.quantity ?? 0) * (h.avgBuyPrice ?? 0);
+    const value = (h.quantity ?? 0) * (h.currentPrice ?? 0);
+    return { ...h, invested, value, resultEur: value - invested };
+  });
+  const totalInvested = base.reduce((t, h) => t + h.invested, 0);
+  const totalValue = base.reduce((t, h) => t + h.value, 0);
+  return {
+    holdings: base.map((h) => ({
+      ...h,
+      resultPct: h.invested > 0 ? h.resultEur / h.invested : null,
+      allocation: totalValue > 0 ? h.value / totalValue : 0,
+    })),
+    totalInvested,
+    totalValue,
+    totalResultEur: totalValue - totalInvested,
+    totalResultPct: totalInvested > 0 ? (totalValue - totalInvested) / totalInvested : null,
+  };
+}
+
+// ---------------------------------------------------------------- forecast
+
+export interface ForecastYearRow {
+  year: number;
+  startValue: number;
+  contributed: number;
+  endValue: number;
+  totalContributed: number;
+  inTodaysMoney: number;
+}
+
+/**
+ * Prognose: monthly compounding at rate r/12, contribution added each month,
+ * inflation-discounted "koopkracht van nu" column. Matches the sheet's model.
+ */
+export function forecastTable(
+  f: ForecastAssumptions,
+  defaults: { startValue: number; monthlyContribution: number },
+): ForecastYearRow[] {
+  const start = f.startValueOverride ?? defaults.startValue;
+  const monthly = f.monthlyContributionOverride ?? defaults.monthlyContribution;
+  const rMonth = f.expectedReturnPerYear / 12;
+  const rows: ForecastYearRow[] = [{
+    year: 0, startValue: start, contributed: 0, endValue: start,
+    totalContributed: start, inTodaysMoney: start,
+  }];
+  let value = start;
+  let totalContributed = start;
+  for (let y = 1; y <= f.horizonYears; y++) {
+    const startValue = value;
+    for (let m = 0; m < 12; m++) value = value * (1 + rMonth) + monthly;
+    totalContributed += monthly * 12;
+    rows.push({
+      year: y, startValue, contributed: monthly * 12, endValue: value,
+      totalContributed,
+      inTodaysMoney: value / Math.pow(1 + f.inflationPerYear, y),
+    });
+  }
+  return rows;
+}
+
+/** Prognose scenario grid: end value after `years` for a contribution × return matrix. */
+export function forecastScenario(
+  startValue: number, monthlyContribution: number, returnPerYear: number, years: number,
+): number {
+  const rMonth = returnPerYear / 12;
+  let value = startValue;
+  for (let m = 0; m < years * 12; m++) value = value * (1 + rMonth) + monthlyContribution;
+  return value;
+}
+
+// ---------------------------------------------------------------- mortgage
+
+export interface AmortizationRow {
+  monthIndex: number; // 1-based
+  date: string;       // "yyyy-MM"
+  startBalance: number;
+  interest: number;
+  principal: number;
+  extra: number;
+  endBalance: number;
+}
+
+/** Annuity payment for principal P, monthly rate i, n months. */
+export function annuityPayment(principal: number, ratePerYear: number, years: number): number {
+  const i = ratePerYear / 12;
+  const n = years * 12;
+  if (n <= 0) return 0;
+  if (i === 0) return principal / n;
+  return (principal * i) / (1 - Math.pow(1 + i, -n));
+}
+
+/** Hypotheek & Woning: full monthly amortization schedule incl. extra repayments. */
+export function amortizationSchedule(m: MortgageInputs): AmortizationRow[] {
+  const payment = m.monthlyPaymentOverride ?? annuityPayment(
+    m.principalRemaining, m.interestRatePerYear, m.remainingTermYears);
+  const i = m.interestRatePerYear / 12;
+  const maxMonths = m.remainingTermYears * 12;
+  const [y0, mo0] = m.firstPaymentMonth.split("-").map(Number);
+  const rows: AmortizationRow[] = [];
+  let balance = m.principalRemaining;
+  for (let k = 0; k < maxMonths && balance > 0.005; k++) {
+    const interest = balance * i;
+    let principal = Math.min(payment - interest, balance);
+    if (principal < 0) principal = 0; // payment below interest: balance grows — surfaced in UI
+    let extra = Math.min(m.extraRepaymentPerMonth, balance - principal);
+    if (extra < 0) extra = 0;
+    const end = balance - principal - extra;
+    const total = (mo0 - 1) + k;
+    const date = `${y0 + Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+    rows.push({
+      monthIndex: k + 1, date, startBalance: balance,
+      interest, principal, extra, endBalance: Math.max(end, 0),
+    });
+    balance = Math.max(end, 0);
+  }
+  return rows;
+}
+
+export interface MortgageSummary {
+  computedAnnuity: number;
+  usedPayment: number;
+  equity: number;              // overwaarde
+  loanToValue: number;
+  firstMonthInterest: number;
+  firstMonthPrincipal: number;
+  netHousingCostPerMonth: number;
+  totalRemainingInterest: number;
+  payoffDate: string | null;   // "yyyy-MM" of last schedule row
+}
+
+/** Hypotheek & Woning: kerngetallen. */
+export function mortgageSummary(m: MortgageInputs): MortgageSummary {
+  const computedAnnuity = annuityPayment(m.principalRemaining, m.interestRatePerYear, m.remainingTermYears);
+  const usedPayment = m.monthlyPaymentOverride ?? computedAnnuity;
+  const schedule = amortizationSchedule(m);
+  const first = schedule[0];
+  return {
+    computedAnnuity,
+    usedPayment,
+    equity: m.homeMarketValue - m.principalRemaining,
+    loanToValue: m.homeMarketValue > 0 ? m.principalRemaining / m.homeMarketValue : 0,
+    firstMonthInterest: first?.interest ?? 0,
+    firstMonthPrincipal: first?.principal ?? 0,
+    netHousingCostPerMonth: usedPayment - m.interestDeductionPerMonth,
+    totalRemainingInterest: schedule.reduce((t, r) => t + r.interest, 0),
+    payoffDate: schedule.at(-1)?.date ?? null,
+  };
+}
+
+/** Restschuld + overwaarde per year (for the year chart), derived from the schedule. */
+export function mortgagePerYear(m: MortgageInputs) {
+  const schedule = amortizationSchedule(m);
+  const out = [{ year: 0, balance: m.principalRemaining, equity: m.homeMarketValue - m.principalRemaining }];
+  for (let y = 1; y * 12 <= schedule.length; y++) {
+    const balance = schedule[y * 12 - 1].endBalance;
+    out.push({ year: y, balance, equity: m.homeMarketValue - balance });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- debts
+
+export const totalDebt = (debts: Debt[]) =>
+  debts.reduce((t, d) => t + d.principalRemaining, 0);
+
+export const totalDebtExclMortgage = (debts: Debt[]) =>
+  debts.filter((d) => !d.linkedToMortgage).reduce((t, d) => t + d.principalRemaining, 0);
+
+export const totalDebtPaymentPerMonth = (debts: Debt[]) =>
+  debts.reduce((t, d) => t + d.monthlyPayment, 0);
+
+/** "Klaar in": first payment month + remaining term. */
+export function debtPayoffDate(d: Debt, from = new Date()): Date | null {
+  if (d.remainingTermMonths == null) return null;
+  const out = new Date(from);
+  out.setMonth(out.getMonth() + d.remainingTermMonths);
+  return out;
+}
+
+// ---------------------------------------------------------------- net worth
+
+export interface NetWorthDerived {
+  assets: { label: string; value: number; auto: boolean }[];
+  totalAssets: number;
+  liabilities: { label: string; value: number }[];
+  totalLiabilities: number;
+  netWorth: number;
+}
+
+/** Vermogen: bezittingen − schulden, with auto lines from portfolio and mortgage. */
+export function netWorthDerived(s: FinancialState): NetWorthDerived {
+  const pf = portfolioDerived(s);
+  const cryptoValue = pf.holdings
+    .filter((h) => h.platform.toLowerCase() === "bitvavo")
+    .reduce((t, h) => t + h.value, 0);
+  const brokerValue = pf.totalValue - cryptoValue;
+
+  const assets = [
+    { label: "Betaalrekening(en)", value: s.netWorth.manualAssets.checkingAccounts ?? 0, auto: false },
+    { label: "Spaarrekening(en)", value: s.netWorth.manualAssets.savingsAccounts ?? 0, auto: false },
+    { label: "Beleggingen", value: brokerValue, auto: true },
+    { label: "Crypto", value: cryptoValue, auto: true },
+    { label: "Woning (marktwaarde)", value: s.mortgage.homeMarketValue, auto: true },
+    { label: "Overige bezittingen", value: s.netWorth.manualAssets.otherAssets ?? 0, auto: false },
+  ];
+  const liabilities = s.debts.map((d) => ({ label: d.description, value: d.principalRemaining }));
+  const totalAssets = assets.reduce((t, a) => t + a.value, 0);
+  const totalLiabilities = liabilities.reduce((t, l) => t + l.value, 0);
+  return { assets, totalAssets, liabilities, totalLiabilities, netWorth: totalAssets - totalLiabilities };
+}
+
+// ---------------------------------------------------------------- savings goals
+
+export interface SavingsGoalDerived extends SavingsGoal {
+  effectiveTarget: number;
+  stillNeeded: number;
+  monthsToGo: number | null;
+  progress: number; // 0..1
+}
+
+/** Sparen: progress and months-to-go per goal. Emergency fund target = 6 × fixed costs. */
+export function savingsGoalsDerived(s: FinancialState): {
+  goals: SavingsGoalDerived[];
+  availablePerMonth: number;
+  plannedPerMonth: number;
+  freePerMonth: number;
+} {
+  const availablePerMonth = savingsRoomPerMonth(s);
+  const sixMonthsFixed = 6 * totalFixedExpensesPerMonth(s);
+  const goals = s.savingsGoals.map((g) => {
+    const effectiveTarget = g.targetAmount ?? (g.isEmergencyFund ? sixMonthsFixed : 0);
+    const saved = g.savedSoFar ?? 0;
+    const stillNeeded = Math.max(effectiveTarget - saved, 0);
+    const perMonth = g.contributionPerMonth ?? 0;
+    return {
+      ...g,
+      effectiveTarget,
+      stillNeeded,
+      monthsToGo: perMonth > 0 ? Math.ceil(stillNeeded / perMonth) : null,
+      progress: effectiveTarget > 0 ? Math.min(saved / effectiveTarget, 1) : 0,
+    };
+  });
+  const plannedPerMonth = goals.reduce((t, g) => t + (g.contributionPerMonth ?? 0), 0);
+  return { goals, availablePerMonth, plannedPerMonth, freePerMonth: availablePerMonth - plannedPerMonth };
+}
+
+// ---------------------------------------------------------------- dashboard rollup
+
+/** Everything the dashboard shows, in one derived object. */
+export function dashboard(s: FinancialState) {
+  const pf = portfolioDerived(s);
+  const nw = netWorthDerived(s);
+  const mg = mortgageSummary(s.mortgage);
+  const goals = savingsGoalsDerived(s);
+  const emergency = goals.goals.find((g) => g.isEmergencyFund);
+  const forecastEnd = forecastTable(s.forecast, {
+    startValue: pf.totalValue,
+    monthlyContribution: totalInvestingPerMonth(s),
+  }).at(-1);
+
+  return {
+    incomePerMonth: totalIncomePerMonth(s),
+    fixedPerMonth: totalFixedExpensesPerMonth(s),
+    investingPerMonth: totalInvestingPerMonth(s),
+    savingsRoomPerMonth: savingsRoomPerMonth(s),
+    savingsRate: savingsRate(s),
+    setAsidePerYear: setAsidePerYear(s),
+    portfolioValue: pf.totalValue,
+    netWorth: nw.netWorth,
+    forecastValue: forecastEnd?.endValue ?? 0,
+    forecastYears: s.forecast.horizonYears,
+    emergencyFundProgress: emergency?.progress ?? 0,
+    homeValue: s.mortgage.homeMarketValue,
+    mortgageRemaining: s.mortgage.principalRemaining,
+    homeEquity: mg.equity,
+    loanToValue: mg.loanToValue,
+    otherDebt: totalDebtExclMortgage(s.debts),
+    netHousingCostPerMonth: mg.netHousingCostPerMonth,
+  };
+}
