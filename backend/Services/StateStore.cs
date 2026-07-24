@@ -15,7 +15,7 @@ namespace FinancieelOverzicht.Api.Services;
 /// enforced with a revision number: PUT must carry the revision it was based
 /// on (If-Match header); a mismatch returns 409 so the client can re-sync.
 /// </summary>
-public sealed class StateStore
+public sealed class StateStore : IStateStore
 {
     private readonly string _dataDir;
     private readonly string _statePath;

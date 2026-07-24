@@ -4,7 +4,18 @@ using FinancieelOverzicht.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<StateStore>();
+// Use in-memory mock storage if FINANCE_TRACKER_USE_INMEMORY=true (dev/testing without backend deployment)
+var useInMemory = builder.Configuration.GetValue<bool>("UseInMemory") ||
+                  Environment.GetEnvironmentVariable("FINANCE_TRACKER_USE_INMEMORY")?.ToLower() == "true";
+
+if (useInMemory)
+{
+    builder.Services.AddSingleton<IStateStore, InMemoryStateStore>();
+}
+else
+{
+    builder.Services.AddSingleton<IStateStore, StateStore>();
+}
 
 // CORS: the frontend lives on Vercel, the API on the VPS. Origins come from config
 // so preview deployments can be added without a rebuild.
@@ -42,18 +53,19 @@ app.Use(async (ctx, next) =>
 });
 
 // --- Health -------------------------------------------------------------------
-app.MapGet("/healthz", (StateStore store) => Results.Ok(new
+app.MapGet("/healthz", (IStateStore store) => Results.Ok(new
 {
     status = "ok",
     revision = store.Current.Revision,
     updatedAt = store.Current.UpdatedAt,
+    storageMode = useInMemory ? "in-memory (mock)" : "persistent",
 }));
 
 // --- Full state sync ----------------------------------------------------------
 
 // GET /api/state → the whole document + revision. Supports If-None-Match so a
 // polling client pays nothing when unchanged.
-app.MapGet("/api/state", (HttpContext ctx, StateStore store) =>
+app.MapGet("/api/state", (HttpContext ctx, IStateStore store) =>
 {
     var envl = store.Current;
     var etag = $"\"{envl.Revision}\"";
@@ -66,7 +78,7 @@ app.MapGet("/api/state", (HttpContext ctx, StateStore store) =>
 
 // PUT /api/state → replace the whole document. Requires If-Match: "<revision>".
 // 409 = someone else saved first; the client must GET, merge/confirm, retry.
-app.MapPut("/api/state", async (HttpContext ctx, StateStore store, CancellationToken ct) =>
+app.MapPut("/api/state", async (HttpContext ctx, IStateStore store, CancellationToken ct) =>
 {
     var ifMatch = ctx.Request.Headers.IfMatch.ToString().Trim('"');
     if (!long.TryParse(ifMatch, out var baseRevision))
