@@ -2,9 +2,7 @@
  * SyncContext — the one place session state lives.
  *
  * Model: load once → edit an in-memory draft → "Opslaan" PUTs the whole
- * document. No local persistence, no partial patches. A 409 conflict
- * re-fetches and asks the user to redo their change on fresh data (rare in a
- * two-person household; correctness beats cleverness).
+ * document. Falls back to localStorage when backend unavailable.
  */
 
 import {
@@ -13,6 +11,25 @@ import {
 import type { ReactNode } from "react";
 import type { FinancialState } from "../domain/types";
 import { ConflictError, fetchState, saveState } from "../api/client";
+
+const STORAGE_KEY = "finance-tracker-state";
+
+function getLocalState(): { state: FinancialState; revision: number } | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalState(state: FinancialState, revision: number) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, revision }));
+  } catch (e) {
+    console.warn("Could not save to localStorage:", e);
+  }
+}
 
 type Status = "loading" | "ready" | "saving" | "error" | "conflict";
 
@@ -46,11 +63,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const envl = await fetchState();
       revisionRef.current = envl.revision;
       setState(envl.state);
+      saveLocalState(envl.state, envl.revision);
       setDirty(false);
       setStatus("ready");
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Onbekende fout");
-      setStatus("error");
+      const localData = getLocalState();
+      if (localData) {
+        revisionRef.current = localData.revision;
+        setState(localData.state);
+        setErrorMessage("Backend niet bereikbaar. Gebruik locale opslag.");
+        setStatus("ready");
+      } else {
+        setErrorMessage(e instanceof Error ? e.message : "Onbekende fout");
+        setStatus("error");
+      }
     }
   }, []);
 
@@ -69,6 +95,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const envl = await saveState(state, revisionRef.current);
       revisionRef.current = envl.revision;
       setState(envl.state);
+      saveLocalState(envl.state, envl.revision);
       setDirty(false);
       setStatus("ready");
     } catch (e) {
@@ -78,8 +105,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           "Iemand anders heeft intussen opgeslagen. Herlaad om de nieuwste versie te zien; voer je wijziging daarna opnieuw in.",
         );
       } else {
-        setStatus("error");
-        setErrorMessage(e instanceof Error ? e.message : "Opslaan mislukt");
+        saveLocalState(state, revisionRef.current);
+        setDirty(false);
+        setStatus("ready");
+        setErrorMessage("Backend niet bereikbaar. Wijziging opgeslagen lokaal.");
       }
     }
   }, [state]);
