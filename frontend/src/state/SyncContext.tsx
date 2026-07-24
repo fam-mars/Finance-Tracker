@@ -25,9 +25,12 @@ function getLocalState(): { state: FinancialState; revision: number } | null {
 
 function saveLocalState(state: FinancialState, revision: number) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, revision }));
+    const json = JSON.stringify({ state, revision });
+    console.log("Saving to localStorage, size:", json.length, "bytes");
+    localStorage.setItem(STORAGE_KEY, json);
+    console.log("✅ Successfully saved to localStorage");
   } catch (e) {
-    console.warn("Could not save to localStorage:", e);
+    console.error("❌ Could not save to localStorage:", e instanceof Error ? e.message : e);
   }
 }
 

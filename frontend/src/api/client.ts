@@ -184,11 +184,12 @@ export async function fetchState(): Promise<StateEnvelope> {
 export async function saveState(state: FinancialState, baseRevision: number): Promise<StateEnvelope> {
   // If no API URL configured, throw so caller can use localStorage
   if (!BASE) {
-    console.warn("No VITE_API_BASE_URL configured; backend unavailable");
+    console.log("❌ No VITE_API_BASE_URL configured; using localStorage only");
     throw new LocalStorageFallbackError("Backend niet beschikbaar");
   }
 
   try {
+    console.log("📤 Saving to backend:", BASE + "/api/state", "revision:", baseRevision);
     const res = await fetch(`${BASE}/api/state`, {
       method: "PUT",
       headers: headers({
@@ -197,6 +198,8 @@ export async function saveState(state: FinancialState, baseRevision: number): Pr
       }),
       body: JSON.stringify(state),
     });
+    console.log("📥 Backend response:", res.status);
+
     if (res.status === 409) {
       const body = (await res.json().catch(() => null)) as { currentRevision?: number } | null;
       throw new ConflictError(body?.currentRevision ?? -1);
@@ -206,10 +209,12 @@ export async function saveState(state: FinancialState, baseRevision: number): Pr
       throw new ApiError(422, `Validatie mislukt: ${(body?.problems ?? []).join("; ")}`);
     }
     if (!res.ok) throw new ApiError(res.status, `Opslaan mislukt (${res.status})`);
+
+    console.log("✅ Successfully saved to backend");
     return (await res.json()) as StateEnvelope;
   } catch (e) {
     if (e instanceof ConflictError || e instanceof LocalStorageFallbackError) throw e;
-    console.warn("Failed to save to API:", e instanceof Error ? e.message : e);
+    console.error("❌ Failed to save to API:", e instanceof Error ? e.message : e);
     throw new LocalStorageFallbackError("Backend onbereikbaar; wijzigingen opgeslagen lokaal");
   }
 }
