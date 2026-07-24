@@ -114,8 +114,32 @@ function MonthOverview({ state }: { state: FinancialState }) {
   const now = new Date();
   const currentKey = MONTH_KEYS[now.getMonth()];
   const [month, setMonth] = useState<MonthKey>(currentKey);
+  const [newCategory, setNewCategory] = useState("");
   const cols = monthColumns(state);
   const col = cols.find((c) => c.month === month)!;
+
+  const addVariableExpense = () => {
+    if (!newCategory.trim()) return;
+    const id = `var-${Date.now()}`;
+    update((s) => ({
+      ...s,
+      monthOverview: {
+        ...s.monthOverview,
+        variableExpenses: [...s.monthOverview.variableExpenses, { id, category: newCategory, budgetPerMonth: null, actuals: {} }],
+      },
+    }));
+    setNewCategory("");
+  };
+
+  const deleteVariableExpense = (id: string) => {
+    update((s) => ({
+      ...s,
+      monthOverview: {
+        ...s.monthOverview,
+        variableExpenses: s.monthOverview.variableExpenses.filter((x) => x.id !== id),
+      },
+    }));
+  };
 
   return (
     <>
@@ -130,23 +154,75 @@ function MonthOverview({ state }: { state: FinancialState }) {
       <section className="card">
         <h2 className="card-title">Variabele uitgaven · {month} {state.monthOverview.year}</h2>
         {state.monthOverview.variableExpenses.map((cat) => (
-          <div className="row" key={cat.id}>
-            <span className="row-label">{cat.category}</span>
-            <EditableNumber
-              value={cat.actuals[month] ?? null}
-              allowNull
-              ariaLabel={`${cat.category} in ${month}`}
-              onCommit={(v) => update((s) => ({
-                ...s,
-                monthOverview: {
-                  ...s.monthOverview,
-                  variableExpenses: s.monthOverview.variableExpenses.map((x) =>
-                    x.id === cat.id ? { ...x, actuals: { ...x.actuals, [month]: v } } : x),
-                },
-              }))}
-            />
+          <div key={cat.id} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div style={{ flex: 1 }}>
+              <div className="row">
+                <span className="row-label">{cat.category}</span>
+                <EditableNumber
+                  value={cat.actuals[month] ?? null}
+                  allowNull
+                  ariaLabel={`${cat.category} in ${month}`}
+                  onCommit={(v) => update((s) => ({
+                    ...s,
+                    monthOverview: {
+                      ...s.monthOverview,
+                      variableExpenses: s.monthOverview.variableExpenses.map((x) =>
+                        x.id === cat.id ? { ...x, actuals: { ...x.actuals, [month]: v } } : x),
+                    },
+                  }))}
+                />
+              </div>
+            </div>
+            <button
+              onClick={() => deleteVariableExpense(cat.id)}
+              style={{
+                padding: "0.4rem 0.6rem",
+                backgroundColor: "#ffebee",
+                color: "#c62828",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+              }}
+              title="Verwijder"
+            >
+              ✕
+            </button>
           </div>
         ))}
+        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+          <input
+            type="text"
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addVariableExpense()}
+            placeholder="Nieuwe categorie..."
+            style={{
+              flex: 1,
+              padding: "0.75rem",
+              border: "1px solid var(--ink-soft)",
+              borderRadius: "4px",
+              fontSize: "0.9rem",
+            }}
+          />
+          <button
+            onClick={addVariableExpense}
+            disabled={!newCategory.trim()}
+            style={{
+              padding: "0.75rem 1rem",
+              backgroundColor: "var(--teal)",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: newCategory.trim() ? "pointer" : "default",
+              opacity: newCategory.trim() ? 1 : 0.5,
+              fontWeight: 600,
+            }}
+          >
+            + Toevoegen
+          </button>
+        </div>
       </section>
 
       <section className="card">

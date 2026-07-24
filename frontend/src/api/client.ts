@@ -42,7 +42,14 @@ const MOCK_STATE: FinancialState = {
     { id: "fx-14", payDay: 29, description: "ASR Hypotheek", category: "Wonen", tag: null, amountPerMonth: 2327.42 },
     { id: "fx-15", payDay: 30, description: "Allianz Inboedel", category: "Verzekeringen", tag: "V", amountPerMonth: 38.52 },
   ],
-  monthOverview: { year: 2026, variableExpenses: [] },
+  monthOverview: {
+    year: 2026,
+    variableExpenses: [
+      { id: "var-1", category: "Restaurant", budgetPerMonth: 150, actuals: { jan: 120, feb: 95, mrt: 150 } },
+      { id: "var-2", category: "Boodschappen extra", budgetPerMonth: 100, actuals: { jan: 50, feb: 60 } },
+      { id: "var-3", category: "Entertainment", budgetPerMonth: 75, actuals: { jan: 40 } },
+    ],
+  },
   portfolio: {
     holdings: [
       { id: "hold-1", platform: "Bitvavo", name: "Bitcoin", ticker: "BTC", quantity: 0.035, avgBuyPrice: 85000, currentPrice: 92500 },
