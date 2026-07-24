@@ -87,12 +87,14 @@ export function Geldstroom({ income, lasten, beleggen, sparen }: {
   );
 }
 
-export type TabId = "dashboard" | "cashflow" | "beleggen" | "wonen" | "vermogen";
+export type TabId = "dashboard" | "cashflow" | "beleggen" | "wonen" | "vermogen" | "retirement" | "optimization";
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "dashboard", label: "Overzicht", icon: "◫" },
   { id: "cashflow", label: "Cashflow", icon: "⇄" },
   { id: "beleggen", label: "Beleggen", icon: "△" },
+  { id: "retirement", label: "FIRE", icon: "🎯" },
+  { id: "optimization", label: "Optimalisatie", icon: "⚡" },
   { id: "wonen", label: "Wonen", icon: "⌂" },
   { id: "vermogen", label: "Vermogen", icon: "◎" },
 ];
