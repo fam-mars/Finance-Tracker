@@ -1,6 +1,7 @@
 import { dashboard, formatEUR, formatPct } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
+import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
 
 export function Dashboard({ state }: { state: FinancialState }) {
   const d = dashboard(state);
@@ -54,6 +55,17 @@ export function Dashboard({ state }: { state: FinancialState }) {
           <div className="stat-note">doel: 6× maandlasten</div>
         </div>
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-3)", marginTop: "var(--sp-4)" }}>
+        <IncomeExpenseComparison state={state} />
+        <CategoryBreakdown state={state} />
+      </div>
+
+      {state.debts.length > 0 && (
+        <div style={{ marginTop: "var(--sp-3)" }}>
+          <DebtSummary state={state} />
+        </div>
+      )}
 
       <section className="card" style={{ marginTop: "var(--sp-4)" }} aria-labelledby="home-title">
         <h2 className="card-title" id="home-title">Wonen</h2>
