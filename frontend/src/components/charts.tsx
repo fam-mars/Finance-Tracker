@@ -1,13 +1,22 @@
+import { useState, useEffect } from "react";
 import type { FinancialState } from "../domain/types";
 
 interface PieChartProps {
   data: { label: string; value: number; color: string }[];
-  width?: number;
-  height?: number;
 }
 
-export function PieChart({ data, width = 240, height = 240 }: PieChartProps) {
-  const radius = Math.min(width, height) / 2 - 20;
+export function PieChart({ data }: PieChartProps) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const width = isMobile ? 140 : 180;
+  const height = isMobile ? 140 : 180;
+  const radius = Math.min(width, height) / 2 - 15;
   const centerX = width / 2;
   const centerY = height / 2;
 
@@ -25,25 +34,24 @@ export function PieChart({ data, width = 240, height = 240 }: PieChartProps) {
     const y2 = centerY + radius * Math.sin(endAngle);
 
     const largeArc = sliceAngle > Math.PI ? 1 : 0;
-
     const path = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 
     return { path, label: d.label, color: d.color, percent: ((d.value / total) * 100).toFixed(0) };
   });
 
   return (
-    <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ flex: "0 0 auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ margin: "0 auto", display: "block" }}>
         {slices.map((slice, i) => (
-          <path key={i} d={slice.path} fill={slice.color} stroke="white" strokeWidth="2" />
+          <path key={i} d={slice.path} fill={slice.color} stroke="white" strokeWidth="1.5" />
         ))}
       </svg>
-      <div style={{ fontSize: "0.85rem", lineHeight: "1.6" }}>
+      <div style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", lineHeight: "1.5", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
         {slices.map((slice, i) => (
-          <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <div style={{ width: "12px", height: "12px", backgroundColor: slice.color, borderRadius: "2px" }} />
-            <span>{slice.label}</span>
-            <span style={{ marginLeft: "auto", fontWeight: 600 }}>{slice.percent}%</span>
+          <div key={i} style={{ display: "flex", gap: "0.4rem", alignItems: "center", minWidth: 0 }}>
+            <div style={{ width: "10px", height: "10px", backgroundColor: slice.color, borderRadius: "2px", flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{slice.label}</span>
+            <span style={{ fontWeight: 600, flexShrink: 0 }}>{slice.percent}%</span>
           </div>
         ))}
       </div>
@@ -53,38 +61,44 @@ export function PieChart({ data, width = 240, height = 240 }: PieChartProps) {
 
 interface BarChartProps {
   data: { label: string; value: number; color?: string }[];
-  width?: number;
-  height?: number;
   maxValue?: number;
 }
 
-export function BarChart({ data, width = 280, height = 180, maxValue }: BarChartProps) {
+export function BarChart({ data, maxValue }: BarChartProps) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const width = isMobile ? 160 : 240;
+  const height = isMobile ? 120 : 160;
   const max = maxValue || Math.max(...data.map((d) => d.value), 1);
-  const barWidth = Math.floor((width - 40) / data.length);
-  const chartHeight = height - 40;
+  const barWidth = Math.floor((width - 30) / data.length);
+  const chartHeight = height - 35;
+  const fontSize = isMobile ? "9" : "11";
+  const valueFontSize = isMobile ? "10" : "12";
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ margin: "0 auto", display: "block", overflow: "visible" }}>
       {data.map((d, i) => {
         const barHeight = (Math.max(0, d.value) / max) * chartHeight;
-        const x = 20 + i * barWidth + 5;
+        const x = 15 + i * barWidth + 3;
         const y = height - 20 - barHeight;
 
         return (
           <g key={i}>
-            <rect x={x} y={y} width={barWidth - 10} height={barHeight} fill={d.color || "var(--teal)"} rx="3" />
-            <text
-              x={x + (barWidth - 10) / 2}
-              y={height - 5}
-              textAnchor="middle"
-              fontSize="11"
-              fill="var(--ink-soft)"
-            >
-              {d.label}
+            <rect x={x} y={y} width={barWidth - 6} height={barHeight} fill={d.color || "var(--teal)"} rx="2" />
+            <text x={x + (barWidth - 6) / 2} y={height - 5} textAnchor="middle" fontSize={fontSize} fill="var(--ink-soft)">
+              {isMobile ? d.label.substring(0, 3) : d.label}
             </text>
-            <text x={x + (barWidth - 10) / 2} y={y - 5} textAnchor="middle" fontSize="12" fill="var(--ink)" fontWeight="600">
-              €{(d.value / 1000).toFixed(0)}k
-            </text>
+            {!isMobile && (
+              <text x={x + (barWidth - 6) / 2} y={y - 3} textAnchor="middle" fontSize={valueFontSize} fill="var(--ink)" fontWeight="600">
+                €{(d.value / 1000).toFixed(0)}k
+              </text>
+            )}
           </g>
         );
       })}
