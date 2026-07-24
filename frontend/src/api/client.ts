@@ -11,7 +11,7 @@ import type { FinancialState, StateEnvelope } from "../domain/types";
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
-// Mock data for when backend is not available (development/Vercel preview)
+// Complete mock data extracted from Financieel_Overzicht_2.0.xlsx
 const MOCK_STATE: FinancialState = {
   schemaVersion: 1,
   meta: {
@@ -22,16 +22,40 @@ const MOCK_STATE: FinancialState = {
     exportedAt: "2026-07-24",
   },
   incomes: [
-    { id: "inc-1", source: "Salaris 1", amountPerMonth: 2750, note: "pas de naam aan" },
-    { id: "inc-2", source: "Salaris 2", amountPerMonth: 3300, note: "pas de naam aan" },
-    { id: "inc-3", source: "KM-vergoeding", amountPerMonth: 108, note: "" },
+    { id: "inc-1", source: "Salaris 1", amountPerMonth: 2750, note: "" },
+    { id: "inc-2", source: "Salaris 2", amountPerMonth: 3300, note: "" },
   ],
   fixedExpenses: [
-    { id: "fx-1", payDay: 1, description: "Rabo kosten", category: "Bankkosten", tag: "V", amountPerMonth: 4.95 },
-    { id: "fx-2", payDay: 2, description: "Amex CC", category: "Bankkosten", tag: "V", amountPerMonth: 20 },
+    { id: "fx-1", payDay: 2, description: "Amex CC", category: "Bankkosten", tag: "V", amountPerMonth: 20 },
+    { id: "fx-2", payDay: 4, description: "PB", category: "Persoonlijk", tag: "V", amountPerMonth: 400 },
+    { id: "fx-3", payDay: 5, description: "Boodschappen", category: "Boodschappen", tag: "V", amountPerMonth: 500 },
+    { id: "fx-4", payDay: 7, description: "Centraal Beheer Overlijdensverzekering", category: "Verzekeringen", tag: null, amountPerMonth: 21.47 },
+    { id: "fx-5", payDay: 10, description: "Odido Mobiel 1", category: "Telecom", tag: "V THIJS", amountPerMonth: 56.5 },
+    { id: "fx-6", payDay: 11, description: "Rheinland inkomensverzekering", category: "Verzekeringen", tag: null, amountPerMonth: 30.42 },
+    { id: "fx-7", payDay: 12, description: "Analyn schoon", category: "Huishouden", tag: null, amountPerMonth: 120 },
+    { id: "fx-8", payDay: 13, description: "Bookbeat", category: "Abonnementen", tag: null, amountPerMonth: 10.98 },
+    { id: "fx-9", payDay: 14, description: "Odido Mobiel 2", category: "Telecom", tag: null, amountPerMonth: 56.5 },
+    { id: "fx-10", payDay: 15, description: "CZ Zorgverzekering", category: "Verzekeringen", tag: null, amountPerMonth: 140.5 },
+    { id: "fx-11", payDay: 25, description: "DUO studieschuld", category: "Aflossingen", tag: "V THIJS", amountPerMonth: 218.56 },
+    { id: "fx-12", payDay: 27, description: "Vitens", category: "Nutsvoorzieningen", tag: "V", amountPerMonth: 21 },
+    { id: "fx-13", payDay: 28, description: "Odido Internet", category: "Telecom", tag: "V", amountPerMonth: 42.87 },
+    { id: "fx-14", payDay: 29, description: "ASR Hypotheek", category: "Wonen", tag: null, amountPerMonth: 2327.42 },
+    { id: "fx-15", payDay: 30, description: "Allianz Inboedel", category: "Verzekeringen", tag: "V", amountPerMonth: 38.52 },
   ],
   monthOverview: { year: 2026, variableExpenses: [] },
-  portfolio: { holdings: [], monthlyContributions: [] },
+  portfolio: {
+    holdings: [
+      { id: "hold-1", platform: "Bitvavo", name: "Bitcoin", ticker: "BTC", quantity: 0.5, avgBuyPrice: null, currentPrice: null },
+      { id: "hold-2", platform: "Bitvavo", name: "Ethereum", ticker: "ETH", quantity: 3.2, avgBuyPrice: null, currentPrice: null },
+      { id: "hold-3", platform: "Degiro", name: "Vanguard S&P 500 UCITS ETF", ticker: "VUSA", quantity: 15, avgBuyPrice: null, currentPrice: null },
+      { id: "hold-4", platform: "Degiro", name: "iShares Core MSCI World", ticker: "EUNL", quantity: 20, avgBuyPrice: null, currentPrice: null },
+    ],
+    monthlyContributions: [
+      { id: "contrib-1", target: "Bitvavo — Bitcoin", amountPerMonth: 250, note: null },
+      { id: "contrib-2", target: "Bitvavo — Ethereum", amountPerMonth: 250, note: null },
+      { id: "contrib-3", target: "Degiro — ETF's, S&P 500 & trackers", amountPerMonth: 500, note: null },
+    ],
+  },
   forecast: {
     startValueOverride: null,
     monthlyContributionOverride: null,
@@ -40,22 +64,64 @@ const MOCK_STATE: FinancialState = {
     horizonYears: 20,
   },
   mortgage: {
-    homeMarketValue: 350000,
-    purchasePrice: null,
-    principalRemaining: 280000,
-    interestRatePerYear: 0.038,
-    remainingTermYears: 22,
-    firstPaymentMonth: "2023-12",
+    homeMarketValue: 525000,
+    purchasePrice: 470000,
+    principalRemaining: 455000,
+    interestRatePerYear: 0.042,
+    remainingTermYears: 29,
+    firstPaymentMonth: "2026-08",
     extraRepaymentPerMonth: 0,
     monthlyPaymentOverride: null,
     interestDeductionPerMonth: 880,
   },
-  debts: [],
+  debts: [
+    {
+      id: "debt-1",
+      description: "Hypotheek woning",
+      lender: "ASR",
+      owner: "Samen",
+      principalRemaining: 455000,
+      interestRatePerYear: 0.042,
+      monthlyPayment: 2327.42,
+      remainingTermMonths: null,
+      linkedToMortgage: true,
+      note: null,
+    },
+    {
+      id: "debt-2",
+      description: "Studieschuld DUO",
+      lender: "DUO",
+      owner: "Thijs",
+      principalRemaining: 64000,
+      interestRatePerYear: 0.0256,
+      monthlyPayment: 218.56,
+      remainingTermMonths: null,
+      linkedToMortgage: false,
+      note: null,
+    },
+  ],
   netWorth: {
-    manualAssets: { checkingAccounts: 5000, savingsAccounts: 15000, otherAssets: null },
+    manualAssets: { checkingAccounts: 4000, savingsAccounts: 3500, otherAssets: null },
     snapshots: [],
   },
-  savingsGoals: [],
+  savingsGoals: [
+    {
+      id: "goal-1",
+      name: "Noodfonds",
+      targetAmount: null, // Derived: 6x monthly fixed costs
+      savedSoFar: 5000,
+      contributionPerMonth: 500,
+      isEmergencyFund: true,
+    },
+    {
+      id: "goal-2",
+      name: "Vakantie",
+      targetAmount: 3000,
+      savedSoFar: 1200,
+      contributionPerMonth: 200,
+      isEmergencyFund: false,
+    },
+  ],
   mutualLoans: [],
 };
 

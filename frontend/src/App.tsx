@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SyncProvider, useSync } from "./state/SyncContext";
 import { SaveBar, TabBar, type TabId } from "./components/ui";
+import { AuthScreen } from "./components/auth";
 import { Dashboard } from "./screens/Dashboard";
 import { Cashflow } from "./screens/Cashflow";
 import { Beleggen } from "./screens/Beleggen";
@@ -48,6 +49,17 @@ function Shell() {
 }
 
 export default function App() {
+  const [authenticated, setAuthenticated] = useState(() => {
+    // Check if auth is disabled or already authenticated
+    const authEnabled = import.meta.env.VITE_AUTH_MODE || import.meta.env.VITE_AUTH_CODE;
+    if (!authEnabled) return true;
+    return sessionStorage.getItem("auth_token") === "authenticated";
+  });
+
+  if (!authenticated) {
+    return <AuthScreen onAuth={() => setAuthenticated(true)} />;
+  }
+
   return (
     <SyncProvider>
       <Shell />
