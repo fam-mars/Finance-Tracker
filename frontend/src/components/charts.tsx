@@ -136,7 +136,7 @@ export function CategoryBreakdown({ state }: { state: FinancialState }) {
   return (
     <div style={{ padding: "1rem", backgroundColor: "#f9f8f7", borderRadius: "8px" }}>
       <h3 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem", fontWeight: 600 }}>Lasten per categorie</h3>
-      <PieChart data={data} width={200} height={200} />
+      <PieChart data={data} />
     </div>
   );
 }
@@ -155,7 +155,7 @@ export function DebtSummary({ state }: { state: FinancialState }) {
   return (
     <div style={{ padding: "1rem", backgroundColor: "#f9f8f7", borderRadius: "8px" }}>
       <h3 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem", fontWeight: 600 }}>Schulden</h3>
-      <BarChart data={data} width={280} height={160} />
+      <BarChart data={data} />
     </div>
   );
 }
@@ -173,7 +173,7 @@ export function IncomeExpenseComparison({ state }: { state: FinancialState }) {
   return (
     <div style={{ padding: "1rem", backgroundColor: "#f9f8f7", borderRadius: "8px" }}>
       <h3 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem", fontWeight: 600 }}>Inkomsten vs Lasten</h3>
-      <BarChart data={data} width={280} height={160} />
+      <BarChart data={data} />
       <div style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: balance >= 0 ? "#e8f5e9" : "#ffebee", borderRadius: "4px" }}>
         <div style={{ fontSize: "0.85rem", color: balance >= 0 ? "#2e7d32" : "#c62828" }}>
           Maandelijks saldo: <strong>€{balance.toFixed(2)}</strong>
