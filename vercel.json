@@ -1,0 +1,21 @@
+{
+  "buildCommand": "npm install",
+  "framework": "nodejs",
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "env": [
+    {
+      "key": "NODE_ENV",
+      "value": "production"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "main": false,
+      "claude/finance-tracker-setup-pstcix": true
+    }
+  }
+}
