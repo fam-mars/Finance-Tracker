@@ -32,7 +32,13 @@ const MOCK_STATE: FinancialState = {
   ],
   monthOverview: { year: 2026, variableExpenses: [] },
   portfolio: { holdings: [], monthlyContributions: [] },
-  forecast: { expectedReturnPerYear: 0.07, inflationPerYear: 0.02, horizonYears: 20 },
+  forecast: {
+    startValueOverride: null,
+    monthlyContributionOverride: null,
+    expectedReturnPerYear: 0.07,
+    inflationPerYear: 0.02,
+    horizonYears: 20,
+  },
   mortgage: {
     homeMarketValue: 350000,
     purchasePrice: null,
@@ -41,10 +47,14 @@ const MOCK_STATE: FinancialState = {
     remainingTermYears: 22,
     firstPaymentMonth: "2023-12",
     extraRepaymentPerMonth: 0,
+    monthlyPaymentOverride: null,
     interestDeductionPerMonth: 880,
   },
   debts: [],
-  netWorth: { manualAssets: { checkingAccounts: 5000, savingsAccounts: 15000 }, snapshots: [] },
+  netWorth: {
+    manualAssets: { checkingAccounts: 5000, savingsAccounts: 15000, otherAssets: null },
+    snapshots: [],
+  },
   savingsGoals: [],
   mutualLoans: [],
 };
