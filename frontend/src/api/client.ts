@@ -45,10 +45,10 @@ const MOCK_STATE: FinancialState = {
   monthOverview: { year: 2026, variableExpenses: [] },
   portfolio: {
     holdings: [
-      { id: "hold-1", platform: "Bitvavo", name: "Bitcoin", ticker: "BTC", quantity: 0.5, avgBuyPrice: null, currentPrice: null },
-      { id: "hold-2", platform: "Bitvavo", name: "Ethereum", ticker: "ETH", quantity: 3.2, avgBuyPrice: null, currentPrice: null },
-      { id: "hold-3", platform: "Degiro", name: "Vanguard S&P 500 UCITS ETF", ticker: "VUSA", quantity: 15, avgBuyPrice: null, currentPrice: null },
-      { id: "hold-4", platform: "Degiro", name: "iShares Core MSCI World", ticker: "EUNL", quantity: 20, avgBuyPrice: null, currentPrice: null },
+      { id: "hold-1", platform: "Bitvavo", name: "Bitcoin", ticker: "BTC", quantity: 0.035, avgBuyPrice: 85000, currentPrice: 92500 },
+      { id: "hold-2", platform: "Bitvavo", name: "Ethereum", ticker: "ETH", quantity: 1.5, avgBuyPrice: 2800, currentPrice: 3200 },
+      { id: "hold-3", platform: "Degiro", name: "Vanguard S&P 500 UCITS ETF", ticker: "VUSA", quantity: 40, avgBuyPrice: 95, currentPrice: 98 },
+      { id: "hold-4", platform: "Degiro", name: "iShares Core MSCI World", ticker: "EUNL", quantity: 40, avgBuyPrice: 102, currentPrice: 105 },
     ],
     monthlyContributions: [
       { id: "contrib-1", target: "Bitvavo — Bitcoin", amountPerMonth: 250, note: null },
