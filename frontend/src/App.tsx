@@ -51,7 +51,14 @@ function Shell() {
 export default function App() {
   const [authenticated, setAuthenticated] = useState(() => {
     // Check if auth is disabled or already authenticated
-    const authEnabled = import.meta.env.VITE_AUTH_MODE || import.meta.env.VITE_AUTH_CODE;
+    const authMode = import.meta.env.VITE_AUTH_MODE;
+    const authCode = import.meta.env.VITE_AUTH_CODE;
+    const authEnabled = authMode || authCode;
+
+    if (import.meta.env.DEV) {
+      console.log("Auth config:", { authMode, authCode, authEnabled });
+    }
+
     if (!authEnabled) return true;
     return sessionStorage.getItem("auth_token") === "authenticated";
   });

@@ -137,6 +137,12 @@ export class ApiError extends Error {
   }
 }
 
+export class LocalStorageFallbackError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 function headers(extra: Record<string, string> = {}): HeadersInit {
   const h: Record<string, string> = { ...extra };
   if (API_KEY) h["X-Api-Key"] = API_KEY;
@@ -166,13 +172,13 @@ export async function fetchState(): Promise<StateEnvelope> {
  * PUT the full document, based on `baseRevision`.
  * Throws ConflictError on 409 — caller should re-fetch, let the user confirm,
  * and retry against the new revision.
- * Without API URL, saves succeed locally only (mock mode).
+ * Throws LocalStorageFallbackError when backend unavailable — caller should use localStorage.
  */
 export async function saveState(state: FinancialState, baseRevision: number): Promise<StateEnvelope> {
-  // If no API URL configured, simulate success in mock mode
+  // If no API URL configured, throw so caller can use localStorage
   if (!BASE) {
-    console.warn("No VITE_API_BASE_URL configured; save simulated locally only");
-    return { revision: baseRevision + 1, updatedAt: new Date().toISOString(), state };
+    console.warn("No VITE_API_BASE_URL configured; backend unavailable");
+    throw new LocalStorageFallbackError("Backend niet beschikbaar");
   }
 
   try {
@@ -195,8 +201,8 @@ export async function saveState(state: FinancialState, baseRevision: number): Pr
     if (!res.ok) throw new ApiError(res.status, `Opslaan mislukt (${res.status})`);
     return (await res.json()) as StateEnvelope;
   } catch (e) {
-    // Fall back to local save on API failure
-    console.warn("Failed to save to API; simulating locally:", e instanceof Error ? e.message : e);
-    return { revision: baseRevision + 1, updatedAt: new Date().toISOString(), state };
+    if (e instanceof ConflictError || e instanceof LocalStorageFallbackError) throw e;
+    console.warn("Failed to save to API:", e instanceof Error ? e.message : e);
+    throw new LocalStorageFallbackError("Backend onbereikbaar; wijzigingen opgeslagen lokaal");
   }
 }

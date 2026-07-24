@@ -98,7 +98,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       saveLocalState(envl.state, envl.revision);
       setDirty(false);
       setStatus("ready");
+      if (import.meta.env.DEV) console.log("Saved to backend and localStorage");
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (import.meta.env.DEV) console.log("Save failed, falling back to localStorage:", errorMsg);
+
       if (e instanceof ConflictError) {
         setStatus("conflict");
         setErrorMessage(
@@ -108,7 +112,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         saveLocalState(state, revisionRef.current);
         setDirty(false);
         setStatus("ready");
-        setErrorMessage("Backend niet bereikbaar. Wijziging opgeslagen lokaal.");
+        setErrorMessage("Wijziging opgeslagen lokaal (backend niet bereikbaar)");
       }
     }
   }, [state]);
