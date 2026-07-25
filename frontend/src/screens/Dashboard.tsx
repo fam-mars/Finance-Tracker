@@ -6,6 +6,30 @@ import { Geldstroom, Money, Pct } from "../components/ui";
 import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
 import { useSync } from "../state/SyncContext";
 
+/** Demo-knop: laat de app zien met fictieve cijfers, zonder eigen gegevens bloot te geven. */
+function DemoButton() {
+  const { demo, enterDemo } = useSync();
+  if (demo) return null;
+  return (
+    <button
+      onClick={enterDemo}
+      title="Laat de app zien met fictieve gegevens"
+      style={{
+        margin: "0 0 var(--sp-4)",
+        padding: "0.5rem 0.9rem",
+        border: "1px solid var(--line)",
+        borderRadius: "999px",
+        background: "var(--surface)",
+        color: "var(--ink-soft)",
+        fontSize: "var(--text-sm)",
+        fontWeight: 600,
+      }}
+    >
+      🎭 Demo-modus — laat de app zien met fictieve cijfers
+    </button>
+  );
+}
+
 /** Backup & herstel — zonder backend is een JSON-bestand je vangnet en je brug tussen apparaten. */
 function DataCard({ state }: { state: FinancialState }) {
   const { update } = useSync();
@@ -98,6 +122,8 @@ export function Dashboard({ state }: { state: FinancialState }) {
     <main className="screen">
       <h1 className="screen-title">Financieel overzicht</h1>
       <p className="screen-sub">Huishoudfinanciën — alles rekent automatisch.</p>
+
+      <DemoButton />
 
       {/* Signature: where does this month's income go? */}
       <section className="card" aria-labelledby="flow-title">

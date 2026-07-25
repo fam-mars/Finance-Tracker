@@ -12,7 +12,7 @@ import { Optimization } from "./screens/Optimization";
 import { Onboarding } from "./screens/Onboarding";
 
 function Shell() {
-  const { status, errorMessage, state, reload } = useSync();
+  const { status, errorMessage, state, reload, demo, exitDemo } = useSync();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -35,6 +35,22 @@ function Shell() {
 
   return (
     <>
+      {demo && (
+        <div className="screen" style={{ paddingBottom: 0, paddingTop: "var(--sp-3)" }}>
+          <div className="banner" style={{
+            backgroundColor: "#ede7f6", color: "#4527a0", marginBottom: "var(--sp-2)",
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-2)",
+          }}>
+            <span>🎭 <strong>Demo-modus</strong> — fictieve gegevens</span>
+            <button onClick={exitDemo} style={{
+              border: "none", borderRadius: "var(--radius-sm)", padding: "6px 12px",
+              backgroundColor: "#4527a0", color: "#fff", fontWeight: 600, fontSize: "var(--text-xs)",
+            }}>
+              Naar echte gegevens
+            </button>
+          </div>
+        </div>
+      )}
       {status === "error" && errorMessage && (
         <div className="screen" style={{ paddingBottom: 0 }}>
           <div className="banner banner--error">{errorMessage}</div>
