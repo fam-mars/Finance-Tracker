@@ -543,3 +543,68 @@ export function dashboard(s: FinancialState) {
     netHousingCostPerMonth: mg.netHousingCostPerMonth,
   };
 }
+
+// ---------------------------------------------------------------- financiële gezondheid
+
+export interface HealthSubscore {
+  key: string;
+  label: string;
+  /** 0–100 */
+  score: number;
+  detail: string;
+}
+
+export interface FinancialHealth {
+  /** Gewogen totaal 0–100. */
+  score: number;
+  label: "Uitstekend" | "Goed" | "Redelijk" | "Aandacht nodig";
+  subscores: HealthSubscore[];
+}
+
+/**
+ * Samengestelde gezondheidsscore langs Nibud-richtlijnen:
+ * buffer van meerdere maandlasten, ≥10% sparen (20% = uitstekend),
+ * woonquote ≤30% (>40% risicovol), vaste lasten ≤50% van netto inkomen.
+ */
+export function financialHealth(s: FinancialState): FinancialHealth {
+  const d = dashboard(s);
+  const income = d.incomePerMonth || 1;
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+  const spaarRate = (d.investingPerMonth + Math.max(d.savingsRoomPerMonth, 0)) / income;
+  const woonRatio = d.netHousingCostPerMonth / income;
+  const vastRatio = d.fixedPerMonth / income;
+  const bufferMonths = d.totalExpensesPerMonth > 0 ? d.portfolioValue / d.totalExpensesPerMonth : 0;
+
+  const raw: (Omit<HealthSubscore, "score"> & { score01: number; weight: number })[] = [
+    {
+      key: "noodfonds", label: "Noodfonds", weight: 0.25,
+      score01: clamp01(d.emergencyFundProgress),
+      detail: `${formatPct(d.emergencyFundProgress)} van 6× maandlasten (Nibud: 4–5 maandsalarissen voor een gezin)`,
+    },
+    {
+      key: "sparen", label: "Sparen & beleggen", weight: 0.25,
+      score01: clamp01(spaarRate / 0.2),
+      detail: `${formatPct(spaarRate)} van je inkomen (Nibud-minimum 10%, 20%+ is uitstekend)`,
+    },
+    {
+      key: "wonen", label: "Woonquote", weight: 0.2,
+      score01: clamp01((0.45 - woonRatio) / 0.15),
+      detail: `${formatPct(woonRatio)} van je inkomen naar wonen (≤30% gezond, >40% risicovol)`,
+    },
+    {
+      key: "vast", label: "Vaste lasten", weight: 0.15,
+      score01: clamp01((0.65 - vastRatio) / 0.2),
+      detail: `${formatPct(vastRatio)} van je inkomen ligt vast (Nibud-richtlijn: max ±50%)`,
+    },
+    {
+      key: "vermogen", label: "Vermogensbuffer", weight: 0.15,
+      score01: clamp01(bufferMonths / 12),
+      detail: `belegd vermogen dekt ${bufferMonths.toFixed(1)} maanden uitgaven (12+ = sterk)`,
+    },
+  ];
+  const subscores = raw.map((x) => ({ key: x.key, label: x.label, detail: x.detail, score: Math.round(x.score01 * 100) }));
+  const score = Math.round(raw.reduce((t, x) => t + x.score01 * 100 * x.weight, 0));
+  const label = score >= 80 ? "Uitstekend" : score >= 60 ? "Goed" : score >= 40 ? "Redelijk" : "Aandacht nodig";
+  return { score, label, subscores };
+}

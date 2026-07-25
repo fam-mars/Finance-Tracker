@@ -1,7 +1,45 @@
-import { dashboard, formatEUR, formatPct } from "../domain/calc";
+import { dashboard, financialHealth, formatEUR, formatPct } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
 import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
+
+/** Nibud-gebaseerde gezondheidsscore met subscores en voortgangsbalkjes. */
+function HealthCard({ state }: { state: FinancialState }) {
+  const h = financialHealth(state);
+  const color = h.score >= 80 ? "var(--positive)" : h.score >= 60 ? "var(--action)" : h.score >= 40 ? "#f57c00" : "var(--negative)";
+  const weakest = [...h.subscores].sort((a, b) => a.score - b.score)[0];
+  return (
+    <section className="card" aria-labelledby="health-title">
+      <h2 className="card-title" id="health-title">Financiële gezondheid</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", marginBottom: "var(--sp-3)" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", fontWeight: 700, lineHeight: 1, color }}>
+          {h.score}
+        </div>
+        <div>
+          <div style={{ fontWeight: 600 }}>{h.label}</div>
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>score 0–100 · Nibud-richtlijnen</div>
+        </div>
+      </div>
+      {h.subscores.map((s) => (
+        <div key={s.key} style={{ padding: "var(--sp-1) 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-sm)" }}>
+            <span>{s.label}</span>
+            <span className="money" style={{ color: s.score >= 60 ? "var(--positive)" : s.score >= 30 ? "#f57c00" : "var(--negative)" }}>{s.score}</span>
+          </div>
+          <div className="progress" style={{ height: 5, marginTop: 3 }}>
+            <div className="progress-fill" style={{ width: `${s.score}%`, background: s.score >= 60 ? "var(--action)" : s.score >= 30 ? "#f0b429" : "var(--negative)" }} />
+          </div>
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-soft)", marginTop: 2 }}>{s.detail}</div>
+        </div>
+      ))}
+      {weakest && weakest.score < 60 && (
+        <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+          👉 Grootste winst: <strong>{weakest.label.toLowerCase()}</strong> — zie ⚡ Tips voor concrete stappen.
+        </p>
+      )}
+    </section>
+  );
+}
 
 export function Dashboard({ state }: { state: FinancialState }) {
   const d = dashboard(state);
@@ -27,6 +65,8 @@ export function Dashboard({ state }: { state: FinancialState }) {
           <Money value={d.setAsidePerYear} /> per jaar opzij.
         </p>
       </section>
+
+      <HealthCard state={state} />
 
       <div className="stat-grid">
         <div className="stat">

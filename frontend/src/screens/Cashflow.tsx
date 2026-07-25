@@ -86,6 +86,8 @@ function FixedExpenses({ state }: { state: FinancialState }) {
         </div>
       </section>
 
+      <BetaalKalender state={state} />
+
       <section className="card">
         <h2 className="card-title">Alle vaste lasten</h2>
         {state.fixedExpenses.map((e) => (
@@ -109,6 +111,42 @@ function FixedExpenses({ state }: { state: FinancialState }) {
         ))}
       </section>
     </>
+  );
+}
+
+/** Wanneer in de maand gaan de vaste lasten eraf? Gesorteerd op incassodag, met lopend totaal. */
+function BetaalKalender({ state }: { state: FinancialState }) {
+  const withDay = state.fixedExpenses.filter((e) => e.payDay != null && e.amountPerMonth > 0);
+  if (withDay.length === 0) return null;
+  const sorted = [...withDay].sort((a, b) => (a.payDay ?? 0) - (b.payDay ?? 0));
+  const total = sorted.reduce((t, e) => t + e.amountPerMonth, 0);
+  const today = new Date().getDate();
+  const stillToCome = sorted.filter((e) => (e.payDay ?? 0) >= today).reduce((t, e) => t + e.amountPerMonth, 0);
+  let cumulative = 0;
+  return (
+    <section className="card">
+      <h2 className="card-title">Betaalkalender</h2>
+      <div className="row" style={{ backgroundColor: "#fff3e0", padding: "0.6rem 0.75rem", borderRadius: "4px" }}>
+        <span className="row-label">Komt er deze maand nog aan
+          <span className="row-sub">vanaf vandaag (dag {today})</span>
+        </span>
+        <strong><Money value={stillToCome} cents /></strong>
+      </div>
+      {sorted.map((e) => {
+        cumulative += e.amountPerMonth;
+        const passed = (e.payDay ?? 0) < today;
+        return (
+          <div className="row" key={e.id} style={passed ? { opacity: 0.55 } : undefined}>
+            <span className="row-label">
+              <span className="money" style={{ display: "inline-block", minWidth: 52, fontWeight: 600 }}>dag {e.payDay}</span>
+              {e.description}
+              <span className="row-sub">cumulatief <Money value={cumulative} /> van <Money value={total} /></span>
+            </span>
+            <Money value={e.amountPerMonth} cents />
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
@@ -156,44 +194,82 @@ function MonthOverview({ state }: { state: FinancialState }) {
 
       <section className="card">
         <h2 className="card-title">Variabele uitgaven · {month} {state.monthOverview.year}</h2>
-        {state.monthOverview.variableExpenses.map((cat) => (
-          <div key={cat.id} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
-            <div style={{ flex: 1 }}>
-              <div className="row">
-                <span className="row-label">{cat.category}</span>
+        {state.monthOverview.variableExpenses.map((cat) => {
+          const actual = cat.actuals[month] ?? 0;
+          const budget = cat.budgetPerMonth;
+          const usage = budget && budget > 0 ? actual / budget : null;
+          const over = usage != null && usage > 1;
+          return (
+            <div key={cat.id} style={{ marginBottom: "0.9rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <div style={{ flex: 1 }}>
+                  <div className="row" style={{ borderTop: "none" }}>
+                    <span className="row-label">{cat.category}</span>
+                    <EditableNumber
+                      value={cat.actuals[month] ?? null}
+                      allowNull
+                      ariaLabel={`${cat.category} in ${month}`}
+                      onCommit={(v) => update((s) => ({
+                        ...s,
+                        monthOverview: {
+                          ...s.monthOverview,
+                          variableExpenses: s.monthOverview.variableExpenses.map((x) =>
+                            x.id === cat.id ? { ...x, actuals: { ...x.actuals, [month]: v } } : x),
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => deleteVariableExpense(cat.id)}
+                  style={{
+                    padding: "0.4rem 0.6rem",
+                    backgroundColor: "#ffebee",
+                    color: "#c62828",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                  }}
+                  title="Verwijder"
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginTop: 4 }}>
+                {usage != null ? (
+                  <div className="progress" style={{ flex: 1, height: 5 }}
+                    role="progressbar" aria-valuenow={Math.round(usage * 100)} aria-valuemin={0} aria-valuemax={100}
+                    aria-label={`Budgetgebruik ${cat.category}`}>
+                    <div className="progress-fill" style={{
+                      width: `${Math.min(usage * 100, 100)}%`,
+                      background: over ? "var(--negative)" : usage > 0.85 ? "#f0b429" : "var(--action)",
+                    }} />
+                  </div>
+                ) : (
+                  <span style={{ flex: 1, fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>geen budget ingesteld</span>
+                )}
+                <span style={{ fontSize: "var(--text-xs)", color: over ? "var(--negative)" : "var(--ink-soft)", whiteSpace: "nowrap" }}>
+                  {usage != null ? `${Math.round(usage * 100)}% van` : "budget:"}
+                </span>
                 <EditableNumber
-                  value={cat.actuals[month] ?? null}
+                  value={cat.budgetPerMonth}
                   allowNull
-                  ariaLabel={`${cat.category} in ${month}`}
+                  ariaLabel={`Budget per maand voor ${cat.category}`}
                   onCommit={(v) => update((s) => ({
                     ...s,
                     monthOverview: {
                       ...s.monthOverview,
                       variableExpenses: s.monthOverview.variableExpenses.map((x) =>
-                        x.id === cat.id ? { ...x, actuals: { ...x.actuals, [month]: v } } : x),
+                        x.id === cat.id ? { ...x, budgetPerMonth: v } : x),
                     },
                   }))}
                 />
               </div>
             </div>
-            <button
-              onClick={() => deleteVariableExpense(cat.id)}
-              style={{
-                padding: "0.4rem 0.6rem",
-                backgroundColor: "#ffebee",
-                color: "#c62828",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-              }}
-              title="Verwijder"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+          );
+        })}
         <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
           <input
             type="text"

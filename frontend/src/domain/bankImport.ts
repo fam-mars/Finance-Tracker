@@ -233,6 +233,71 @@ export function aggregateExpenses(state: FinancialState, txs: BankTransaction[])
   return { sums, counted, skippedIncome, skippedFixed, skippedOtherYear, totalExpenses };
 }
 
+// ---------------------------------------------------------------- abonnementen
+
+export interface RecurringPayment {
+  merchant: string;
+  perMonth: number;
+  perYear: number;
+  count: number;
+  dayOfMonth: number;
+  lastDate: string;
+}
+
+/** Normaliseer een omschrijving tot een merchant-sleutel (cijfers/data eruit, eerste woorden). */
+function merchantKey(description: string): string {
+  return description
+    .toLowerCase()
+    .replace(/\d+/g, " ")
+    .replace(/[^a-zà-ÿ&.\- ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .slice(0, 3)
+    .join(" ");
+}
+
+/**
+ * Detecteer terugkerende betalingen (abonnementen): dezelfde tegenpartij,
+ * stabiel bedrag, maandelijkse cadans (25–36 dagen tussen afschrijvingen).
+ */
+export function detectRecurring(txs: BankTransaction[]): RecurringPayment[] {
+  const groups = new Map<string, BankTransaction[]>();
+  for (const t of txs) {
+    if (t.amount >= 0) continue;
+    const k = merchantKey(t.description);
+    if (k.length < 3) continue;
+    const list = groups.get(k) ?? [];
+    list.push(t);
+    groups.set(k, list);
+  }
+  const out: RecurringPayment[] = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const amounts = list.map((t) => Math.abs(t.amount));
+    const min = Math.min(...amounts), max = Math.max(...amounts);
+    if (max > min * 1.35 + 1) continue; // bedrag moet stabiel zijn
+    const dates = list.map((t) => t.date).sort();
+    let monthly = true;
+    for (let i = 1; i < dates.length; i++) {
+      const gap = (Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 86400000;
+      if (gap < 25 || gap > 36) { monthly = false; break; }
+    }
+    if (!monthly) continue;
+    const avg = Math.round((amounts.reduce((a, b) => a + b, 0) / amounts.length) * 100) / 100;
+    const lastDate = dates[dates.length - 1];
+    out.push({
+      merchant: list[0].description.trim(),
+      perMonth: avg,
+      perYear: Math.round(avg * 12 * 100) / 100,
+      count: list.length,
+      dayOfMonth: Math.min(Number(lastDate.slice(8, 10)) || 1, 28),
+      lastDate,
+    });
+  }
+  return out.sort((a, b) => b.perYear - a.perYear);
+}
+
 /** Zet de geaggregeerde sommen in het maandoverzicht; import overschrijft de maand-actual per categorie. */
 export function applyImportToState(state: FinancialState, sums: ImportSummary["sums"]): FinancialState {
   let variableExpenses = [...state.monthOverview.variableExpenses];

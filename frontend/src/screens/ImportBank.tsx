@@ -2,9 +2,9 @@ import { useRef, useState } from "react";
 import type { FinancialState, MonthKey } from "../domain/types";
 import { MONTH_KEYS } from "../domain/types";
 import {
-  aggregateExpenses, applyImportToState, parseBankFile,
+  aggregateExpenses, applyImportToState, detectRecurring, parseBankFile,
 } from "../domain/bankImport";
-import type { ImportSummary, ParseResult } from "../domain/bankImport";
+import type { ImportSummary, ParseResult, RecurringPayment } from "../domain/bankImport";
 import { Money } from "../components/ui";
 import { useSync } from "../state/SyncContext";
 
@@ -18,11 +18,14 @@ export function ImportSection({ state }: { state: FinancialState }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [recurring, setRecurring] = useState<RecurringPayment[]>([]);
+  const [addedSubs, setAddedSubs] = useState<string[]>([]);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
     setError(null); setApplied(false); setResult(null); setSummary(null);
+    setRecurring([]); setAddedSubs([]);
     try {
       const text = await file.text();
       const parsed = parseBankFile(text);
@@ -32,9 +35,32 @@ export function ImportSection({ state }: { state: FinancialState }) {
       }
       setResult(parsed);
       setSummary(aggregateExpenses(state, parsed.transactions));
+      setRecurring(detectRecurring(parsed.transactions));
     } catch {
       setError("Bestand kon niet gelezen worden.");
     }
+  };
+
+  /** Bestaat deze merchant al (ongeveer) in de vaste lasten? */
+  const inFixed = (merchant: string) => {
+    const m = merchant.toLowerCase().slice(0, 12);
+    return state.fixedExpenses.some((e) =>
+      e.description.toLowerCase().includes(m) || m.includes(e.description.toLowerCase()));
+  };
+
+  const addAsFixed = (r: RecurringPayment) => {
+    update((s) => ({
+      ...s,
+      fixedExpenses: [...s.fixedExpenses, {
+        id: `fx-import-${Date.now()}`,
+        payDay: r.dayOfMonth,
+        description: r.merchant,
+        category: "Abonnementen",
+        tag: null,
+        amountPerMonth: r.perMonth,
+      }],
+    }));
+    setAddedSubs((prev) => [...prev, r.merchant]);
   };
 
   const apply = () => {
@@ -92,6 +118,47 @@ export function ImportSection({ state }: { state: FinancialState }) {
             <strong className="row-label">Totaal variabele uitgaven</strong>
             <strong><Money value={summary.totalExpenses} cents /></strong>
           </div>
+        </section>
+      )}
+
+      {recurring.length > 0 && (
+        <section className="card" style={{ backgroundColor: "#fff8e1", borderLeft: "4px solid var(--accent)" }}>
+          <h2 className="card-title">🔁 Terugkerende betalingen gevonden</h2>
+          <p style={{ margin: "0 0 var(--sp-2)", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
+            Abonnementen en incasso's met een vast maandbedrag. Check of je ze nog wilt —
+            opzeggen is vaak de snelste besparing.
+          </p>
+          {recurring.map((r) => {
+            const already = inFixed(r.merchant) || addedSubs.includes(r.merchant);
+            return (
+              <div className="row" key={r.merchant}>
+                <span className="row-label">{r.merchant}
+                  <span className="row-sub">{r.count}× gezien · <Money value={r.perYear} /> per jaar</span>
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                  <Money value={r.perMonth} cents />
+                  <button
+                    onClick={() => addAsFixed(r)}
+                    disabled={already}
+                    title={already ? "Staat al in vaste lasten" : "Voeg toe aan vaste lasten"}
+                    style={{
+                      padding: "0.3rem 0.55rem", border: "none", borderRadius: "4px",
+                      fontSize: "0.75rem", fontWeight: 600, cursor: already ? "default" : "pointer",
+                      backgroundColor: already ? "var(--surface-sunken)" : "var(--action)",
+                      color: already ? "var(--ink-soft)" : "#fff",
+                    }}
+                  >
+                    {already ? "✓" : "+ vast"}
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+          {addedSubs.length > 0 && (
+            <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)", color: "var(--positive)" }}>
+              Toegevoegd aan vaste lasten — druk op <strong>Opslaan</strong> om te bewaren.
+            </p>
+          )}
         </section>
       )}
 
