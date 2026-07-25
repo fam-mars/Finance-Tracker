@@ -30,11 +30,96 @@ export function Beleggen({ state }: { state: FinancialState }) {
   );
 }
 
+/**
+ * Live crypto-koersen via de publieke Bitvavo API (alleen prijzen — geen
+ * account-koppeling, dus geen API-sleutels in de browser). DeGiro heeft geen
+ * publieke API; ETF-koersen blijven handmatig.
+ */
+async function fetchBitvavoPrice(ticker: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.bitvavo.com/v2/ticker/price?market=${encodeURIComponent(ticker)}-EUR`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { price?: string };
+    const price = Number(data.price);
+    return Number.isFinite(price) ? Math.round(price * 100) / 100 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** CSV-export voor getquin.com (kolommen daar handmatig te mappen bij import). */
+function downloadGetquinCsv(state: FinancialState) {
+  const today = new Date().toISOString().slice(0, 10);
+  const quote = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [
+    ["Date", "Type", "AssetType", "Identifier", "Name", "Shares", "Price", "Currency"],
+    ...state.portfolio.holdings
+      .filter((h) => (h.quantity ?? 0) > 0)
+      .map((h) => [
+        today, "Buy",
+        h.platform.toLowerCase() === "bitvavo" ? "Crypto" : "ETF",
+        h.ticker ?? h.name, h.name,
+        h.quantity ?? 0, h.avgBuyPrice ?? h.currentPrice ?? 0, "EUR",
+      ]),
+  ];
+  const csv = rows.map((r) => r.map(quote).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "getquin-import.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function Holdings({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const pf = portfolioDerived(state);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const syncBitvavo = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    const cryptos = state.portfolio.holdings.filter(
+      (h) => h.platform.toLowerCase() === "bitvavo" && h.ticker);
+    let updated = 0;
+    for (const h of cryptos) {
+      const price = await fetchBitvavoPrice(h.ticker!);
+      if (price != null) {
+        update((s) => patchHolding(s, h.id, { currentPrice: price }));
+        updated++;
+      }
+    }
+    setSyncMsg(updated > 0
+      ? `✓ ${updated} van ${cryptos.length} koersen bijgewerkt — druk op Opslaan om te bewaren.`
+      : "Kon geen koersen ophalen (Bitvavo niet bereikbaar).");
+    setSyncing(false);
+  };
+
   return (
     <>
+      <section className="card">
+        <h2 className="card-title">Koppelingen</h2>
+        <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+          <button className="btn btn-primary" disabled={syncing} onClick={() => void syncBitvavo()}>
+            {syncing ? "Bezig…" : "🔄 Bitvavo koersen"}
+          </button>
+          <button className="btn btn-ghost" onClick={() => downloadGetquinCsv(state)}>
+            ⬇ getquin-export
+          </button>
+        </div>
+        {syncMsg && (
+          <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", color: syncMsg.startsWith("✓") ? "var(--positive)" : "var(--negative)" }}>
+            {syncMsg}
+          </p>
+        )}
+        <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+          Bitvavo: live prijzen via de publieke API, geen account-koppeling nodig. DeGiro heeft geen
+          publieke API — ETF-koersen werk je handmatig bij. De getquin-export is een CSV die je op
+          getquin.com kunt importeren om je portefeuille daar te volgen.
+        </p>
+      </section>
+
       <section className="card">
         <h2 className="card-title">Totaal</h2>
         <div className="row"><span className="row-label">Ingelegd</span><Money value={pf.totalInvested} /></div>

@@ -7,20 +7,22 @@ import type { FinancialState, MonthKey } from "../domain/types";
 import { MONTH_KEYS } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
+import { ImportSection } from "./ImportBank";
 
-type Section = "inkomsten" | "lasten" | "maand";
+type Section = "inkomsten" | "lasten" | "maand" | "import";
 
 export function Cashflow({ state }: { state: FinancialState }) {
   const [section, setSection] = useState<Section>("lasten");
   return (
     <main className="screen">
       <h1 className="screen-title">Cashflow</h1>
-      <p className="screen-sub">Inkomsten, vaste lasten en het maandoverzicht.</p>
+      <p className="screen-sub">Inkomsten, vaste lasten, maandoverzicht en bankimport.</p>
       <Segments
         options={[
           { id: "inkomsten", label: "Inkomsten" },
           { id: "lasten", label: "Vaste lasten" },
           { id: "maand", label: "Maandoverzicht" },
+          { id: "import", label: "Import" },
         ]}
         value={section}
         onChange={setSection}
@@ -28,6 +30,7 @@ export function Cashflow({ state }: { state: FinancialState }) {
       {section === "inkomsten" && <Incomes state={state} />}
       {section === "lasten" && <FixedExpenses state={state} />}
       {section === "maand" && <MonthOverview state={state} />}
+      {section === "import" && <ImportSection state={state} />}
     </main>
   );
 }
