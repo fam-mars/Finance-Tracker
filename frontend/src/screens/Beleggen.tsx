@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  forecastTable, formatEUR, formatPct, portfolioDerived, totalInvestingPerMonth,
+  allocationByClass, assetClassOf, forecastTable, formatEUR, formatPct,
+  portfolioDerived, totalInvestingPerMonth,
 } from "../domain/calc";
+import { applyPortfolioRows, parseDegiroPortfolio } from "../domain/portfolioImport";
 import type { FinancialState } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
+
+const PLATFORMS = ["Bitvavo", "Degiro", "Trading 212", "Mintos", "Bondora", "Anders"] as const;
 
 type Section = "portefeuille" | "inleg" | "prognose";
 
@@ -55,12 +59,15 @@ function downloadGetquinCsv(state: FinancialState) {
     ["Date", "Type", "AssetType", "Identifier", "Name", "Shares", "Price", "Currency"],
     ...state.portfolio.holdings
       .filter((h) => (h.quantity ?? 0) > 0)
-      .map((h) => [
-        today, "Buy",
-        h.platform.toLowerCase() === "bitvavo" ? "Crypto" : "ETF",
-        h.ticker ?? h.name, h.name,
-        h.quantity ?? 0, h.avgBuyPrice ?? h.currentPrice ?? 0, "EUR",
-      ]),
+      .map((h) => {
+        const klass = assetClassOf(h.platform);
+        return [
+          today, "Buy",
+          klass === "Crypto" ? "Crypto" : klass === "Aandelen & ETF's" ? "ETF" : "Other",
+          h.ticker ?? h.name, h.name,
+          h.quantity ?? 0, h.avgBuyPrice ?? h.currentPrice ?? 0, "EUR",
+        ];
+      }),
   ];
   const csv = rows.map((r) => r.map(quote).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -74,6 +81,8 @@ function downloadGetquinCsv(state: FinancialState) {
 function Holdings({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const pf = portfolioDerived(state);
+  const allocation = allocationByClass(state);
+  const degiroRef = useRef<HTMLInputElement>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
@@ -81,7 +90,7 @@ function Holdings({ state }: { state: FinancialState }) {
     setSyncing(true);
     setSyncMsg(null);
     const cryptos = state.portfolio.holdings.filter(
-      (h) => h.platform.toLowerCase() === "bitvavo" && h.ticker);
+      (h) => assetClassOf(h.platform) === "Crypto" && h.ticker);
     let updated = 0;
     for (const h of cryptos) {
       const price = await fetchBitvavoPrice(h.ticker!);
@@ -96,6 +105,26 @@ function Holdings({ state }: { state: FinancialState }) {
     setSyncing(false);
   };
 
+  const importDegiro = async (file: File) => {
+    setSyncMsg(null);
+    try {
+      const rows = parseDegiroPortfolio(await file.text());
+      if (rows.length === 0) {
+        setSyncMsg("Geen posities gevonden — exporteer in de DeGiro-webtrader je Portefeuille als CSV.");
+        return;
+      }
+      let updated = 0, created = 0;
+      update((s) => {
+        const r = applyPortfolioRows(s, rows, "Degiro");
+        updated = r.updated; created = r.created;
+        return r.state;
+      });
+      setSyncMsg(`✓ DeGiro: ${updated} bijgewerkt, ${created} nieuw — druk op Opslaan om te bewaren.`);
+    } catch {
+      setSyncMsg("Bestand kon niet gelezen worden.");
+    }
+  };
+
   return (
     <>
       <section className="card">
@@ -103,6 +132,12 @@ function Holdings({ state }: { state: FinancialState }) {
         <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
           <button className="btn btn-primary" disabled={syncing} onClick={() => void syncBitvavo()}>
             {syncing ? "Bezig…" : "🔄 Bitvavo koersen"}
+          </button>
+          <input ref={degiroRef} type="file" accept=".csv" style={{ display: "none" }}
+            aria-label="DeGiro Portfolio.csv"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void importDegiro(f); e.target.value = ""; }} />
+          <button className="btn btn-primary" onClick={() => degiroRef.current?.click()}>
+            📥 DeGiro CSV
           </button>
           <button className="btn btn-ghost" onClick={() => downloadGetquinCsv(state)}>
             ⬇ getquin-export
@@ -114,11 +149,31 @@ function Holdings({ state }: { state: FinancialState }) {
           </p>
         )}
         <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
-          Bitvavo: live prijzen via de publieke API, geen account-koppeling nodig. DeGiro heeft geen
-          publieke API — ETF-koersen werk je handmatig bij. De getquin-export is een CSV die je op
-          getquin.com kunt importeren om je portefeuille daar te volgen.
+          Bitvavo: live prijzen via de publieke API. DeGiro: exporteer je Portefeuille als CSV in de
+          webtrader en upload hier — posities worden bijgewerkt of aangemaakt. Trading 212, Mintos en
+          Bondora hebben geen bruikbare koppeling: voeg ze hieronder toe (P2P: aantal 1, koers =
+          huidige accountwaarde). Alles blijft lokaal in je browser.
         </p>
       </section>
+
+      {allocation.length > 1 && (
+        <section className="card">
+          <h2 className="card-title">Verdeling per beleggingsklasse</h2>
+          {allocation.map((a) => (
+            <div key={a.klass} style={{ padding: "var(--sp-1) 0" }}>
+              <div className="row" style={{ borderTop: "none", padding: "var(--sp-1) 0" }}>
+                <span className="row-label">{a.klass}
+                  <span className="row-sub">{formatPct(a.share)} van je portefeuille</span>
+                </span>
+                <Money value={a.value} />
+              </div>
+              <div className="progress" style={{ height: 5 }}>
+                <div className="progress-fill" style={{ width: `${a.share * 100}%`, background: "var(--action)" }} />
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="card">
         <h2 className="card-title">Totaal</h2>
@@ -135,7 +190,19 @@ function Holdings({ state }: { state: FinancialState }) {
 
       {pf.holdings.map((h) => (
         <section className="card" key={h.id}>
-          <h2 className="card-title">{h.platform} · {h.name}{h.ticker ? ` (${h.ticker})` : ""}</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <h2 className="card-title">{h.platform} · {h.name}{h.ticker ? ` (${h.ticker})` : ""}</h2>
+            <button
+              onClick={() => update((s) => ({
+                ...s,
+                portfolio: { ...s.portfolio, holdings: s.portfolio.holdings.filter((x) => x.id !== h.id) },
+              }))}
+              title={`Verwijder ${h.name}`}
+              style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}
+            >
+              ✕
+            </button>
+          </div>
           <div className="row">
             <span className="row-label">Aantal</span>
             <EditableNumber value={h.quantity} allowNull ariaLabel={`Aantal ${h.name}`}
@@ -166,7 +233,83 @@ function Holdings({ state }: { state: FinancialState }) {
           </div>
         </section>
       ))}
+
+      <AddHoldingCard />
     </>
+  );
+}
+
+/** Nieuwe positie toevoegen — dekt Trading 212, Mintos, Bondora en alles zonder koppeling. */
+function AddHoldingCard() {
+  const { update } = useSync();
+  const [platform, setPlatform] = useState<string>("Trading 212");
+  const [name, setName] = useState("");
+  const [ticker, setTicker] = useState("");
+  const [qty, setQty] = useState("");
+  const [price, setPrice] = useState("");
+
+  const parseNum = (t: string) => {
+    const n = Number(t.trim().replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  };
+  const isP2P = assetClassOf(platform) === "P2P-leningen";
+  const canAdd = name.trim().length > 0 && parseNum(qty) != null && parseNum(price) != null;
+
+  const add = () => {
+    if (!canAdd) return;
+    const id = `hold-${platform.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`;
+    update((s) => ({
+      ...s,
+      portfolio: {
+        ...s.portfolio,
+        holdings: [...s.portfolio.holdings, {
+          id, platform, name: name.trim(),
+          ticker: ticker.trim() ? ticker.trim().toUpperCase() : null,
+          quantity: parseNum(qty), avgBuyPrice: null, currentPrice: parseNum(price),
+        }],
+      },
+    }));
+    setName(""); setTicker(""); setQty(""); setPrice("");
+  };
+
+  const input = (value: string, set: (v: string) => void, placeholder: string, label: string, numeric = false) => (
+    <input
+      value={value}
+      onChange={(e) => set(e.target.value)}
+      placeholder={placeholder}
+      aria-label={label}
+      inputMode={numeric ? "decimal" : undefined}
+      style={{ width: "100%", padding: "0.6rem", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", fontSize: 16 }}
+    />
+  );
+
+  return (
+    <section className="card">
+      <h2 className="card-title">Positie toevoegen</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-2)" }}>
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          aria-label="Platform"
+          style={{ padding: "0.6rem", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", background: "var(--surface)", fontSize: 16 }}
+        >
+          {PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        {input(ticker, setTicker, "ticker (opt.)", "Ticker")}
+        <div style={{ gridColumn: "1 / -1" }}>
+          {input(name, setName, isP2P ? "bijv. Mintos account" : "naam, bijv. VWRL", "Naam")}
+        </div>
+        {input(qty, setQty, isP2P ? "aantal: 1" : "aantal", "Aantal", true)}
+        {input(price, setPrice, isP2P ? "accountwaarde €" : "koers €", "Huidige koers", true)}
+      </div>
+      <button className="btn btn-primary" style={{ width: "100%", marginTop: "var(--sp-3)" }} disabled={!canAdd} onClick={add}>
+        + Toevoegen
+      </button>
+      <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        P2P (Mintos/Bondora): gebruik aantal 1 en zet je totale accountwaarde als koers —
+        werk die periodiek bij. Klasse ({assetClassOf(platform)}) telt mee in je verdeling en vermogen.
+      </p>
+    </section>
   );
 }
 

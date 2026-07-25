@@ -155,6 +155,33 @@ export function portfolioDerived(s: FinancialState): {
   };
 }
 
+// ---------------------------------------------------------------- asset classes
+
+export type AssetClass = "Crypto" | "Aandelen & ETF's" | "P2P-leningen" | "Overig";
+
+/** Platformnaam → beleggingsklasse (Bitvavo, DeGiro, Trading 212, Mintos, Bondora, …). */
+export function assetClassOf(platform: string): AssetClass {
+  const p = platform.toLowerCase();
+  if (p.includes("bitvavo") || p.includes("crypto") || p.includes("coinbase") || p.includes("kraken")) return "Crypto";
+  if (p.includes("mintos") || p.includes("bondora") || p.includes("p2p") || p.includes("peerberry")) return "P2P-leningen";
+  if (p.includes("degiro") || p.includes("trading") || p.includes("212") || p.includes("broker") || p.includes("etf") || p.includes("meesman") || p.includes("brand new day")) return "Aandelen & ETF's";
+  return "Overig";
+}
+
+/** Portefeuilleverdeling per beleggingsklasse. */
+export function allocationByClass(s: FinancialState): { klass: AssetClass; value: number; share: number }[] {
+  const pf = portfolioDerived(s);
+  const map = new Map<AssetClass, number>();
+  for (const h of pf.holdings) {
+    const k = assetClassOf(h.platform);
+    map.set(k, (map.get(k) ?? 0) + h.value);
+  }
+  return [...map.entries()]
+    .map(([klass, value]) => ({ klass, value, share: pf.totalValue > 0 ? value / pf.totalValue : 0 }))
+    .filter((x) => x.value > 0)
+    .sort((a, b) => b.value - a.value);
+}
+
 // ---------------------------------------------------------------- forecast
 
 export interface ForecastYearRow {
@@ -347,16 +374,20 @@ export interface NetWorthDerived {
 /** Vermogen: bezittingen − schulden, with auto lines from portfolio and mortgage. */
 export function netWorthDerived(s: FinancialState): NetWorthDerived {
   const pf = portfolioDerived(s);
-  const cryptoValue = pf.holdings
-    .filter((h) => h.platform.toLowerCase() === "bitvavo")
-    .reduce((t, h) => t + h.value, 0);
-  const brokerValue = pf.totalValue - cryptoValue;
+  let cryptoValue = 0, p2pValue = 0;
+  for (const h of pf.holdings) {
+    const k = assetClassOf(h.platform);
+    if (k === "Crypto") cryptoValue += h.value;
+    else if (k === "P2P-leningen") p2pValue += h.value;
+  }
+  const brokerValue = pf.totalValue - cryptoValue - p2pValue;
 
   const assets = [
     { label: "Betaalrekening(en)", value: s.netWorth.manualAssets.checkingAccounts ?? 0, auto: false },
     { label: "Spaarrekening(en)", value: s.netWorth.manualAssets.savingsAccounts ?? 0, auto: false },
     { label: "Beleggingen", value: brokerValue, auto: true },
     { label: "Crypto", value: cryptoValue, auto: true },
+    ...(p2pValue > 0 ? [{ label: "P2P-leningen", value: p2pValue, auto: true }] : []),
     { label: "Woning (marktwaarde)", value: s.mortgage.homeMarketValue, auto: true },
     { label: "Overige bezittingen", value: s.netWorth.manualAssets.otherAssets ?? 0, auto: false },
   ];
