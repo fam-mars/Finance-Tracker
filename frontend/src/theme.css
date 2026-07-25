@@ -20,6 +20,7 @@
   --positive: #177b54;
   --negative: #b3372f;
   --focus: #0e5c4a;
+  --teal: #0e5c4a;         /* alias for --action, used by auth/charts/FIRE screens */
 
   /* type */
   --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;

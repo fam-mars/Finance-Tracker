@@ -85,7 +85,7 @@ export function AuthScreen({ onAuth }: AuthScreenProps) {
             </div>
 
             {error && (
-              <div style={{ color: "var(--error)", marginBottom: "1rem", fontSize: "0.9rem" }}>
+              <div style={{ color: "var(--negative)", marginBottom: "1rem", fontSize: "0.9rem" }}>
                 {error}
               </div>
             )}
@@ -149,7 +149,7 @@ export function AuthScreen({ onAuth }: AuthScreenProps) {
             </div>
 
             {error && (
-              <div style={{ color: "var(--error)", marginBottom: "1rem", fontSize: "0.9rem" }}>
+              <div style={{ color: "var(--negative)", marginBottom: "1rem", fontSize: "0.9rem" }}>
                 {error}
               </div>
             )}

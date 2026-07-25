@@ -62,6 +62,10 @@ export function savingsRate(s: FinancialState): number {
 export const setAsidePerYear = (s: FinancialState) =>
   12 * (totalInvestingPerMonth(s) + savingsRoomPerMonth(s));
 
+/** Sum of budgeted variable expenses (restaurant, boodschappen extra, etc). */
+export const totalVariableExpensesPerMonth = (s: FinancialState) =>
+  s.monthOverview.variableExpenses.reduce((t, c) => t + (c.budgetPerMonth ?? 0), 0);
+
 /** Fixed expenses grouped by category, sorted descending, incl. share of total. */
 export function fixedExpensesByCategory(s: FinancialState) {
   const total = totalFixedExpensesPerMonth(s);
@@ -200,6 +204,25 @@ export function forecastScenario(
   let value = startValue;
   for (let m = 0; m < years * 12; m++) value = value * (1 + rMonth) + monthlyContribution;
   return value;
+}
+
+/**
+ * Months of monthly compounding + contribution needed to grow `start` to
+ * `target`. Returns 0 if already there, null if unreachable within 100
+ * years (e.g. contribution and return both non-positive).
+ */
+export function monthsToReachTarget(
+  start: number, monthlyContribution: number, returnPerYear: number, target: number,
+): number | null {
+  if (target <= start) return 0;
+  const rMonth = returnPerYear / 12;
+  let value = start;
+  const maxMonths = 100 * 12;
+  for (let m = 1; m <= maxMonths; m++) {
+    value = value * (1 + rMonth) + monthlyContribution;
+    if (value >= target) return m;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- mortgage
@@ -392,17 +415,33 @@ export function dashboard(s: FinancialState) {
     monthlyContribution: totalInvestingPerMonth(s),
   }).at(-1);
 
+  // Liquid savings only (checking + savings accounts), used where a tip or
+  // calculation needs "cash on hand" rather than total net worth.
+  const liquidSavings =
+    (s.netWorth.manualAssets.checkingAccounts ?? 0) + (s.netWorth.manualAssets.savingsAccounts ?? 0);
+
+  // Net worth minus primary-residence equity: the pool a 4%-rule withdrawal
+  // is actually drawn from. Home value and non-mortgage debt are excluded
+  // so the FIRE number isn't inflated by illiquid equity.
+  const investableNetWorth =
+    nw.totalAssets - s.mortgage.homeMarketValue - totalDebtExclMortgage(s.debts);
+
   return {
     incomePerMonth: totalIncomePerMonth(s),
     fixedPerMonth: totalFixedExpensesPerMonth(s),
+    variablePerMonth: totalVariableExpensesPerMonth(s),
+    totalExpensesPerMonth: totalFixedExpensesPerMonth(s) + totalVariableExpensesPerMonth(s),
     investingPerMonth: totalInvestingPerMonth(s),
     savingsRoomPerMonth: savingsRoomPerMonth(s),
     savingsRate: savingsRate(s),
     setAsidePerYear: setAsidePerYear(s),
     portfolioValue: pf.totalValue,
     netWorth: nw.netWorth,
+    investableNetWorth,
+    liquidSavings,
     forecastValue: forecastEnd?.endValue ?? 0,
     forecastYears: s.forecast.horizonYears,
+    expectedReturnPerYear: s.forecast.expectedReturnPerYear,
     emergencyFundProgress: emergency?.progress ?? 0,
     homeValue: s.mortgage.homeMarketValue,
     mortgageRemaining: s.mortgage.principalRemaining,

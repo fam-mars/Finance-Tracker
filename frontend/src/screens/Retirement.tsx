@@ -1,18 +1,39 @@
 import type { FinancialState } from "../domain/types";
-import { dashboard, formatPct } from "../domain/calc";
+import { dashboard, formatPct, monthsToReachTarget } from "../domain/calc";
 import { Money } from "../components/ui";
 
 export function Retirement({ state }: { state: FinancialState }) {
   const d = dashboard(state);
 
-  // FIRE calculations
-  const monthlyOverage = d.incomePerMonth - d.fixedPerMonth - d.investingPerMonth;
-  const annualSavings = (d.investingPerMonth + d.savingsRoomPerMonth) * 12;
-  const netWorthGoal = (d.fixedPerMonth * 12) * 25; // 4% rule: need 25x annual expenses
-  const yearsToGoal = netWorthGoal > d.netWorth ? (netWorthGoal - d.netWorth) / (annualSavings * 1.05) : 0; // 5% return assumption
+  // FIRE calculations. Uses investable net worth (excludes home equity —
+  // you can't draw 4% a year from the house you live in) and total monthly
+  // spend (fixed + variable), matching the return assumption set on the
+  // Beleggen screen so the numbers stay consistent across the app.
+  const monthlyContribution = d.investingPerMonth + d.savingsRoomPerMonth;
+  const annualContribution = monthlyContribution * 12;
+  const requiredAssets = d.totalExpensesPerMonth * 12 * 25; // 4% rule
 
-  const currentMonthlyNeed = d.fixedPerMonth;
-  const requiredAssets = currentMonthlyNeed * 12 * 25;
+  const monthsToGoal = monthsToReachTarget(
+    d.investableNetWorth, monthlyContribution, d.expectedReturnPerYear, requiredAssets,
+  );
+  const yearsToGoal = monthsToGoal != null ? monthsToGoal / 12 : null;
+  const progress = requiredAssets > 0 ? Math.min(d.investableNetWorth / requiredAssets, 1) : 0;
+
+  const scenarios = [
+    { label: "+€500/maand extra sparen", monthlyDelta: 500, returnDelta: 0 },
+    { label: "+€1000/maand extra sparen", monthlyDelta: 1000, returnDelta: 0 },
+    { label: "+€200/maand minder uitgeven", monthlyDelta: 200, returnDelta: 0 },
+    { label: `${formatPct(d.expectedReturnPerYear + 0.02)} jaarlijks rendement`, monthlyDelta: 0, returnDelta: 0.02 },
+  ].map((scenario) => {
+    const scenarioMonths = monthsToReachTarget(
+      d.investableNetWorth,
+      monthlyContribution + scenario.monthlyDelta,
+      d.expectedReturnPerYear + scenario.returnDelta,
+      requiredAssets,
+    );
+    if (scenarioMonths == null || yearsToGoal == null) return { ...scenario, yearsSaved: null };
+    return { ...scenario, yearsSaved: yearsToGoal - scenarioMonths / 12 };
+  });
 
   return (
     <main className="screen">
@@ -23,14 +44,19 @@ export function Retirement({ state }: { state: FinancialState }) {
       <section className="card" style={{ backgroundColor: "#e8f5e9", borderLeft: "4px solid var(--teal)" }}>
         <div style={{ textAlign: "center", padding: "2rem" }}>
           <div style={{ fontSize: "3rem", fontWeight: 700, color: "var(--teal)", lineHeight: 1 }}>
-            {yearsToGoal > 0 ? Math.ceil(yearsToGoal) : "0"}
+            {yearsToGoal != null ? Math.ceil(yearsToGoal) : "—"}
           </div>
           <div style={{ fontSize: "1rem", color: "var(--ink-soft)", marginTop: "0.5rem" }}>
             jaar tot financiële vrijheid
           </div>
-          {yearsToGoal > 0 && (
+          {yearsToGoal != null && yearsToGoal > 0 && (
             <div style={{ fontSize: "0.9rem", color: "#2e7d32", marginTop: "1rem", fontWeight: 500 }}>
               Pensioen op {new Date().getFullYear() + Math.ceil(yearsToGoal)}
+            </div>
+          )}
+          {yearsToGoal == null && (
+            <div style={{ fontSize: "0.85rem", color: "var(--ink-soft)", marginTop: "1rem" }}>
+              Bij je huidige spaarbedrag en rendement wordt dit doel niet binnen 100 jaar bereikt. Verhoog je maandelijkse inleg of rendement.
             </div>
           )}
         </div>
@@ -40,16 +66,23 @@ export function Retirement({ state }: { state: FinancialState }) {
       <section className="card">
         <h2 className="card-title">Je huidige situatie</h2>
         <div className="row">
-          <span className="row-label">Netto vermogen</span>
+          <span className="row-label">
+            Beleggbaar vermogen
+            <span className="row-sub">exclusief overwaarde woning</span>
+          </span>
+          <Money value={d.investableNetWorth} />
+        </div>
+        <div className="row">
+          <span className="row-label">Netto vermogen (incl. woning)</span>
           <Money value={d.netWorth} />
         </div>
         <div className="row">
-          <span className="row-label">Maandelijks over (na lasten)</span>
-          <Money value={monthlyOverage} signed />
+          <span className="row-label">Maandelijks naar vermogen (sparen + beleggen)</span>
+          <Money value={monthlyContribution} signed />
         </div>
         <div className="row">
-          <span className="row-label">Jaarlijks beleggen</span>
-          <Money value={annualSavings} />
+          <span className="row-label">Jaarlijks naar vermogen</span>
+          <Money value={annualContribution} />
         </div>
       </section>
 
@@ -58,17 +91,22 @@ export function Retirement({ state }: { state: FinancialState }) {
         <h2 className="card-title">Je FIRE Getal (4% regel)</h2>
         <div className="row">
           <span className="row-label">
-            Maandelijke lasten
-            <span className="row-sub">uitgaven die je betaalt</span>
+            Vaste lasten
           </span>
-          <Money value={currentMonthlyNeed} />
+          <Money value={d.fixedPerMonth} />
         </div>
         <div className="row">
           <span className="row-label">
-            Jaarlijkse lasten (× 12)
-            <span className="row-sub">totaal per jaar</span>
+            Variabele uitgaven
+            <span className="row-sub">budget per maand</span>
           </span>
-          <Money value={currentMonthlyNeed * 12} />
+          <Money value={d.variablePerMonth} />
+        </div>
+        <div className="row">
+          <span className="row-label">
+            Totale maandelijkse uitgaven
+          </span>
+          <Money value={d.totalExpensesPerMonth} />
         </div>
         <div className="row" style={{ backgroundColor: "#fff3e0", padding: "0.75rem", borderRadius: "4px", margin: "0.5rem 0" }}>
           <span className="row-label">
@@ -78,7 +116,7 @@ export function Retirement({ state }: { state: FinancialState }) {
           <strong><Money value={requiredAssets} /></strong>
         </div>
         <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-          💡 Met het 4% regel kun je jaarlijks 4% van je vermogen opnemen. Dit helpt je de rest van je leven te leven.
+          💡 Met de 4% regel kun je jaarlijks 4% van je beleggbaar vermogen opnemen. Aannames: {formatPct(d.expectedReturnPerYear)} rendement per jaar (zoals ingesteld bij Beleggen).
         </p>
       </section>
 
@@ -87,8 +125,8 @@ export function Retirement({ state }: { state: FinancialState }) {
         <h2 className="card-title">Voortgang naar FIRE</h2>
         <div style={{ marginBottom: "1rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", fontSize: "0.9rem" }}>
-            <span>Huidige vermogen</span>
-            <span>{formatPct(Math.min(d.netWorth / requiredAssets, 1))}</span>
+            <span>Beleggbaar vermogen</span>
+            <span>{formatPct(progress)}</span>
           </div>
           <div
             style={{
@@ -103,14 +141,14 @@ export function Retirement({ state }: { state: FinancialState }) {
               style={{
                 height: "100%",
                 backgroundColor: "var(--teal)",
-                width: `${Math.min((d.netWorth / requiredAssets) * 100, 100)}%`,
+                width: `${Math.max(progress, 0) * 100}%`,
                 transition: "width 0.3s ease",
               }}
             />
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-          <span><Money value={d.netWorth} /></span>
+          <span><Money value={d.investableNetWorth} /></span>
           <span><Money value={requiredAssets} /></span>
         </div>
       </section>
@@ -118,23 +156,14 @@ export function Retirement({ state }: { state: FinancialState }) {
       {/* Scenarios */}
       <section className="card">
         <h2 className="card-title">Wat als...</h2>
-        {[
-          { label: "+€500/maand extra sparen", delta: 500 * 12 * 1.05 },
-          { label: "+€1000/maand extra sparen", delta: 1000 * 12 * 1.05 },
-          { label: "+€200/maand minder uitgeven", delta: 200 * 12 * 1.05 },
-          { label: "7% jaarlijkse return (vs 5%)", delta: (annualSavings * 0.02 * yearsToGoal) },
-        ].map((scenario, i) => {
-          const newYears = Math.max(0, (requiredAssets - d.netWorth - scenario.delta) / (annualSavings * 1.05));
-          const yearsSaved = yearsToGoal - newYears;
-          return (
-            <div key={i} className="row" style={{ fontSize: "0.9rem" }}>
-              <span className="row-label">{scenario.label}</span>
-              <span style={{ color: yearsSaved > 0 ? "#2e7d32" : "var(--ink)" }}>
-                {yearsSaved > 0 ? `-${yearsSaved.toFixed(1)} jaar` : "−"}
-              </span>
-            </div>
-          );
-        })}
+        {scenarios.map((scenario, i) => (
+          <div key={i} className="row" style={{ fontSize: "0.9rem" }}>
+            <span className="row-label">{scenario.label}</span>
+            <span style={{ color: scenario.yearsSaved && scenario.yearsSaved > 0 ? "#2e7d32" : "var(--ink)" }}>
+              {scenario.yearsSaved != null && scenario.yearsSaved > 0 ? `-${scenario.yearsSaved.toFixed(1)} jaar` : "−"}
+            </span>
+          </div>
+        ))}
       </section>
 
       {/* Tips */}
@@ -142,13 +171,13 @@ export function Retirement({ state }: { state: FinancialState }) {
         <h2 className="card-title">💡 Snelste paden naar FIRE</h2>
         <ul style={{ margin: "0", paddingLeft: "1.5rem", fontSize: "0.9rem", lineHeight: 1.8 }}>
           <li>
-            <strong>Spaarsaldo verhogen</strong> — elke €500 extra per maand = ~1 jaar eerder vrij
+            <strong>Spaarsaldo verhogen</strong> — elke €500 extra per maand scheelt jaren op je tijdlijn
           </li>
           <li>
-            <strong>Lasten verlagen</strong> — €200 besparen = lagere FIRE-getal en sneller bereikt
+            <strong>Lasten verlagen</strong> — €1 minder uitgeven verlaagt je FIRE-getal met €25 (4% regel)
           </li>
           <li>
-            <strong>Beleggingsrendementen</strong> — 6% i.p.v. 5% = aanzienlijk sneller groeien
+            <strong>Beleggingsrendement</strong> — hoger rendement versnelt de samengestelde groei aanzienlijk
           </li>
           <li>
             <strong>Inkomen verhogen</strong> — carrièresprong = grootste impact op timeline

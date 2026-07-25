@@ -62,17 +62,18 @@ function Shell() {
           onClick={() => setShowOnboarding(true)}
           style={{
             position: "fixed",
-            bottom: "80px",
-            right: "1rem",
+            bottom: "calc(var(--tabbar-h) + var(--sp-3))",
+            right: "var(--sp-4)",
             padding: "0.75rem 1rem",
             backgroundColor: "var(--accent)",
             color: "var(--ink)",
             border: "none",
-            borderRadius: "4px",
+            borderRadius: "999px",
             cursor: "pointer",
             fontSize: "0.85rem",
             fontWeight: 600,
-            zIndex: 50,
+            boxShadow: "0 8px 24px rgb(21 40 31 / 0.28)",
+            zIndex: 20,
           }}
           title="Stap-voor-stap gids"
         >

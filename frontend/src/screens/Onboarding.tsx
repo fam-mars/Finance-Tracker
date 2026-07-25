@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSync } from "../state/SyncContext";
-import { Money } from "../components/ui";
+import { EditableNumber, Money } from "../components/ui";
 
 interface OnboardingStep {
   id: string;
@@ -13,26 +13,26 @@ const STEPS: OnboardingStep[] = [
   {
     id: "income",
     title: "Jouw inkomsten",
-    subtitle: "Totale netto maandelijks",
+    subtitle: "Netto maandelijks, per bron",
     help: "Dit is het geld dat je maandelijks binnenkomt na belastingen.",
   },
   {
     id: "expenses",
     title: "Vaste lasten",
-    subtitle: "Totale maandelijkse uitgaven",
+    subtitle: "Maandelijkse uitgaven, per post",
     help: "Huis, eten, verzekeringen, abonnementen - alles wat je elke maand betaalt.",
   },
   {
-    id: "savings",
+    id: "housing",
     title: "Huisbezittingen",
     subtitle: "Huiswaarde en restschuld",
-    help: "Huiswaarde helpt je net vermogen berekenen. Dit is meestal je grootste bezitting.",
+    help: "Huiswaarde helpt je je netto vermogen berekenen. Dit is meestal je grootste bezitting. Bewerk dit via het Wonen scherm.",
   },
   {
     id: "investments",
     title: "Beleggingen",
     subtitle: "Aandelen, crypto, ETF's",
-    help: "Geld dat je laat groeien voor je toekomst. Langetermijn vermogen opbouwen.",
+    help: "Geld dat je laat groeien voor je toekomst. Langetermijn vermogen opbouwen. Bewerk dit via het Beleggen scherm.",
   },
   {
     id: "debt",
@@ -43,7 +43,7 @@ const STEPS: OnboardingStep[] = [
 ];
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
-  const { state } = useSync();
+  const { state, update } = useSync();
   const [currentStep, setCurrentStep] = useState(0);
   const step = STEPS[currentStep];
 
@@ -82,6 +82,10 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
       </div>
 
       <div
+        role="progressbar"
+        aria-valuenow={currentStep + 1}
+        aria-valuemin={1}
+        aria-valuemax={STEPS.length}
         style={{
           width: "100%",
           height: "4px",
@@ -120,60 +124,89 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
       {step.id === "income" && (
         <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Totaal maandelijks inkomen</span>
-            <Money value={totalIncome} />
+          {state.incomes.map((inc) => (
+            <div className="row" key={inc.id}>
+              <span className="row-label">{inc.source}</span>
+              <EditableNumber
+                value={inc.amountPerMonth}
+                ariaLabel={`Bedrag per maand voor ${inc.source}`}
+                onCommit={(v) => update((s) => ({
+                  ...s,
+                  incomes: s.incomes.map((x) => x.id === inc.id ? { ...x, amountPerMonth: v ?? 0 } : x),
+                }))}
+              />
+            </div>
+          ))}
+          <div className="row">
+            <strong className="row-label">Totaal</strong>
+            <strong><Money value={totalIncome} /></strong>
           </div>
-          <p style={{ margin: "0.5rem 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-            {totalIncome > 0
-              ? `Perfect! Je hebt €${totalIncome.toFixed(0)}/maand inkomsten.`
-              : "Voeg inkomsten toe via het Cashflow scherm."}
-          </p>
+          {totalIncome === 0 && (
+            <p style={{ margin: "0.5rem 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
+              Vul je inkomstenbronnen hierboven in.
+            </p>
+          )}
         </div>
       )}
 
       {step.id === "expenses" && (
         <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Totaal maandelijkse lasten</span>
-            <Money value={totalExpenses} />
+          {state.fixedExpenses.map((exp) => (
+            <div className="row" key={exp.id}>
+              <span className="row-label">
+                {exp.description}
+                <span className="row-sub">{exp.category}</span>
+              </span>
+              <EditableNumber
+                value={exp.amountPerMonth}
+                ariaLabel={`Bedrag per maand voor ${exp.description}`}
+                onCommit={(v) => update((s) => ({
+                  ...s,
+                  fixedExpenses: s.fixedExpenses.map((x) => x.id === exp.id ? { ...x, amountPerMonth: v ?? 0 } : x),
+                }))}
+              />
+            </div>
+          ))}
+          <div className="row">
+            <strong className="row-label">Totaal vaste lasten</strong>
+            <strong><Money value={totalExpenses} /></strong>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", padding: "0.75rem", backgroundColor: "#fff3e0", borderRadius: "4px" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Maandelijks over</span>
-            <Money value={Math.max(0, totalIncome - totalExpenses)} />
+          <div className="row" style={{ backgroundColor: "#fff3e0", padding: "0.75rem", borderRadius: "4px", marginTop: "0.5rem" }}>
+            <span className="row-label">Maandelijks over</span>
+            <Money value={totalIncome - totalExpenses} signed />
           </div>
           <p style={{ margin: "0.5rem 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-            Dit is wat je kunt sparen of beleggen!
+            Dit is wat je kunt sparen of beleggen. Losse variabele uitgaven (boodschappen, uit eten) beheer je op het Cashflow scherm.
           </p>
         </div>
       )}
 
-      {step.id === "savings" && (
+      {step.id === "housing" && (
         <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Huiswaarde</span>
+          <div className="row">
+            <span className="row-label">Huiswaarde</span>
             <Money value={state.mortgage.homeMarketValue} />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Restschuld hypotheek</span>
+          <div className="row">
+            <span className="row-label">Restschuld hypotheek</span>
             <Money value={state.mortgage.principalRemaining} />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", padding: "0.75rem", backgroundColor: "#e8f5e9", borderRadius: "4px" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Eigenwaarde</span>
-            <Money value={state.mortgage.homeMarketValue - state.mortgage.principalRemaining} />
+          <div className="row" style={{ backgroundColor: "#e8f5e9", padding: "0.75rem", borderRadius: "4px", marginTop: "0.5rem" }}>
+            <strong className="row-label">Eigenwaarde</strong>
+            <strong><Money value={state.mortgage.homeMarketValue - state.mortgage.principalRemaining} /></strong>
           </div>
         </div>
       )}
 
       {step.id === "investments" && (
         <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Huidige beleggingen</span>
+          <div className="row">
+            <span className="row-label">Huidige beleggingen</span>
             <Money value={totalInvested} />
           </div>
           <p style={{ margin: "0.5rem 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
             {totalInvested > 0
-              ? `Goed bezig! Je hebt €${totalInvested.toFixed(0)} belegd.`
+              ? `Goed bezig! Je hebt ${totalInvested.toLocaleString("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} belegd.`
               : "Voeg beleggingen toe via het Beleggen scherm."}
           </p>
         </div>
@@ -181,8 +214,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
       {step.id === "debt" && (
         <div style={{ marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Totale schulden</span>
+          <div className="row">
+            <span className="row-label">Totale schulden</span>
             <Money value={totalDebt} />
           </div>
           {totalDebt === 0 && (

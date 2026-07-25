@@ -35,7 +35,7 @@ const TIPS: Tip[] = [
   },
   {
     title: "Rente-aftrek benutten",
-    description: "Je betaalt hypotheek rente. Dit is aftrekbaar! Controleer of je huisarts dit correct doet.",
+    description: "Je betaalt hypotheekrente. Dit is aftrekbaar! Controleer of je boekhouder of belastingaangifte dit correct verwerkt.",
     impact: "medium",
     category: "tax",
     condition: (_dashboard_data, s) => s.mortgage.principalRemaining > 0,
@@ -63,10 +63,12 @@ const TIPS: Tip[] = [
   },
   {
     title: "Pak je studieschuld aan",
-    description: "Als je studieschuld betaalt, stop daar mee (tot 2% rente). Beleggen geeft meer return.",
+    description: "Bij een lage rente (tot 2%) is vervroegd aflossen van je studieschuld vaak niet de beste keuze — beleggen geeft historisch een hoger rendement.",
     impact: "high",
     category: "strategy",
-    condition: (_dashboard_data, s) => s.debts.some((debt) => debt.description.includes("studieschuld")),
+    condition: (_dashboard_data, s) => s.debts.some((debt) =>
+      debt.interestRatePerYear <= 0.02
+      || /studieschuld|\bduo\b/i.test(debt.description)),
   },
   {
     title: "Index trackers vs actief beleggen",
@@ -77,10 +79,10 @@ const TIPS: Tip[] = [
   },
   {
     title: "Noodfonds grootte",
-    description: "Zorg dat je 6-12 maand lasten hebt gespaard. Dit geeft zekerheid en slaapt beter.",
+    description: "Zorg dat je 6 maand vaste lasten hebt gespaard op een direct opneembare rekening. Dit geeft zekerheid en slaapt beter — los van wat je belegt of in de woning hebt zitten.",
     impact: "medium",
     category: "strategy",
-    condition: (dashboard_data) => dashboard_data.netWorth < (dashboard_data.fixedPerMonth * 6),
+    condition: (dashboard_data) => dashboard_data.emergencyFundProgress < 1,
   },
 ];
 
