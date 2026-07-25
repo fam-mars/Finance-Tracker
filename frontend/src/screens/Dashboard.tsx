@@ -1,7 +1,57 @@
+import { useRef, useState } from "react";
 import { dashboard, financialHealth, formatEUR, formatPct } from "../domain/calc";
+import { parseBackup, serializeBackup } from "../domain/backup";
 import type { FinancialState } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
 import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
+import { useSync } from "../state/SyncContext";
+
+/** Backup & herstel — zonder backend is een JSON-bestand je vangnet en je brug tussen apparaten. */
+function DataCard({ state }: { state: FinancialState }) {
+  const { update } = useSync();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const exportBackup = () => {
+    const url = URL.createObjectURL(new Blob([serializeBackup(state)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `financieel-overzicht-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setMsg("✓ Backup gedownload — bewaar 'm veilig (bevat je financiële gegevens).");
+  };
+
+  const importBackup = async (file: File) => {
+    const restored = parseBackup(await file.text());
+    if (!restored) {
+      setMsg("Ongeldig backupbestand.");
+      return;
+    }
+    update(() => restored);
+    setMsg("✓ Backup hersteld — controleer de cijfers en druk op Opslaan.");
+  };
+
+  return (
+    <section className="card" style={{ marginTop: "var(--sp-4)" }}>
+      <h2 className="card-title">Gegevens</h2>
+      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+        <button className="btn btn-primary" onClick={exportBackup}>⬇ Backup maken</button>
+        <input ref={fileRef} type="file" accept=".json" style={{ display: "none" }}
+          aria-label="Backup terugzetten"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void importBackup(f); e.target.value = ""; }} />
+        <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>⬆ Backup terugzetten</button>
+      </div>
+      {msg && (
+        <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", color: msg.startsWith("✓") ? "var(--positive)" : "var(--negative)" }}>{msg}</p>
+      )}
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Je gegevens staan in deze browser. Maak regelmatig een backup, of gebruik het bestand om
+        over te stappen naar een ander apparaat.
+      </p>
+    </section>
+  );
+}
 
 /** Nibud-gebaseerde gezondheidsscore met subscores en voortgangsbalkjes. */
 function HealthCard({ state }: { state: FinancialState }) {
@@ -134,6 +184,8 @@ export function Dashboard({ state }: { state: FinancialState }) {
           <Money value={d.otherDebt} />
         </div>
       </section>
+
+      <DataCard state={state} />
     </main>
   );
 }

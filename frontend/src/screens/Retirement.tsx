@@ -200,6 +200,45 @@ export function Retirement({ state }: { state: FinancialState }) {
         ))}
       </section>
 
+      {/* Stresstest */}
+      <section className="card" style={{ backgroundColor: "#e8eaf6", borderLeft: "4px solid #3f51b5" }}>
+        <h2 className="card-title">🛟 Stresstest</h2>
+        {(() => {
+          const sellable = d.liquidSavings + d.portfolioValue;
+          const runway = d.totalExpensesPerMonth > 0 ? sellable / d.totalExpensesPerMonth : 0;
+          return (
+            <>
+              <div className="row">
+                <span className="row-label">Zonder enig inkomen
+                  <span className="row-sub">spaargeld + verkoopbare beleggingen ÷ maandelijkse uitgaven</span>
+                </span>
+                <span className="money" style={{ fontWeight: 700 }}>
+                  {runway >= 1 ? `${Math.floor(runway)} mnd` : "< 1 mnd"}
+                </span>
+              </div>
+              {state.incomes.map((inc) => {
+                const remaining = d.incomePerMonth - inc.amountPerMonth;
+                const balance = remaining - d.totalExpensesPerMonth;
+                const months = balance < 0 ? sellable / -balance : null;
+                return (
+                  <div className="row" key={inc.id}>
+                    <span className="row-label">Als “{inc.source}” wegvalt</span>
+                    <span className="money" style={{ color: balance >= 0 ? "var(--positive)" : "#f57c00" }}>
+                      {balance >= 0
+                        ? `blijft +€${Math.round(balance)} p/m`
+                        : months != null && months >= 1 ? `buffer ${Math.floor(months)} mnd` : "buffer < 1 mnd"}
+                    </span>
+                  </div>
+                );
+              })}
+              <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                Exclusief overwaarde woning; beleggingen tegen huidige waarde, zonder WW of andere vangnetten.
+              </p>
+            </>
+          );
+        })()}
+      </section>
+
       {/* Tips */}
       <section className="card" style={{ backgroundColor: "#f3e5f5", borderLeft: "4px solid #9c27b0" }}>
         <h2 className="card-title">💡 Snelste paden naar FIRE</h2>

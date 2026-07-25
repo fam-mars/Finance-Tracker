@@ -198,6 +198,18 @@ function NetWorth({ state }: { state: FinancialState }) {
 function Goals({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const g = savingsGoalsDerived(state);
+  const [newGoal, setNewGoal] = useState("");
+  const addGoal = () => {
+    if (!newGoal.trim()) return;
+    update((s) => ({
+      ...s,
+      savingsGoals: [...s.savingsGoals, {
+        id: `goal-${Date.now()}`, name: newGoal.trim(),
+        targetAmount: null, savedSoFar: 0, contributionPerMonth: null, isEmergencyFund: false,
+      }],
+    }));
+    setNewGoal("");
+  };
   return (
     <>
       <section className="card">
@@ -209,7 +221,16 @@ function Goals({ state }: { state: FinancialState }) {
 
       {g.goals.map((goal) => (
         <section className="card" key={goal.id}>
-          <h2 className="card-title">{goal.name}</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <h2 className="card-title">{goal.name}</h2>
+            {!goal.isEmergencyFund && (
+              <button onClick={() => update((s) => ({ ...s, savingsGoals: s.savingsGoals.filter((x) => x.id !== goal.id) }))}
+                title={`Verwijder ${goal.name}`}
+                style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}>
+                ✕
+              </button>
+            )}
+          </div>
           <div className="progress" role="progressbar"
             aria-valuenow={Math.round(goal.progress * 100)} aria-valuemin={0} aria-valuemax={100}
             aria-label={`Voortgang ${goal.name}`}>
@@ -248,6 +269,17 @@ function Goals({ state }: { state: FinancialState }) {
           </div>
         </section>
       ))}
+
+      <section className="card">
+        <h2 className="card-title">Spaardoel toevoegen</h2>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <input type="text" value={newGoal} onChange={(e) => setNewGoal(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addGoal()}
+            placeholder="bijv. Auto, verbouwing, sabbatical…" aria-label="Naam nieuw spaardoel"
+            style={{ flex: 1, padding: "0.6rem", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)", fontSize: 16 }} />
+          <button className="btn btn-primary" disabled={!newGoal.trim()} onClick={addGoal}>+</button>
+        </div>
+      </section>
     </>
   );
 }
