@@ -17,7 +17,7 @@ export interface BankTransaction {
 }
 
 export interface ParseResult {
-  bank: "ING" | "Rabobank" | "ABN AMRO" | "Generiek";
+  bank: "ING" | "Rabobank" | "ABN AMRO" | "Revolut" | "Generiek";
   transactions: BankTransaction[];
   skippedLines: number;
 }
@@ -126,6 +126,39 @@ function parseAbnAmro(lines: string[]): BankTransaction[] {
   return out;
 }
 
+/**
+ * Revolut app-export: "Type,Product,Started Date,Completed Date,Description,
+ * Amount,Fee,Currency,State,Balance". Punt-decimalen; alleen COMPLETED en EUR;
+ * de fee wordt bij de uitgave opgeteld.
+ */
+function parseRevolut(lines: string[]): BankTransaction[] {
+  const header = splitLine(lines[0], ",").map((h) => h.trim());
+  const iStarted = header.indexOf("Started Date");
+  const iCompleted = header.indexOf("Completed Date");
+  const iDesc = header.indexOf("Description");
+  const iAmount = header.indexOf("Amount");
+  const iFee = header.indexOf("Fee");
+  const iCurrency = header.indexOf("Currency");
+  const iState = header.indexOf("State");
+  const out: BankTransaction[] = [];
+  for (const line of lines.slice(1)) {
+    const f = splitLine(line, ",");
+    if ((f[iState] ?? "").trim().toUpperCase() !== "COMPLETED") continue;
+    if (iCurrency >= 0 && (f[iCurrency] ?? "").trim() !== "EUR") continue;
+    const rawDate = (f[iCompleted] ?? "").trim() || (f[iStarted] ?? "").trim();
+    const date = parseDate(rawDate.slice(0, 10));
+    const amount = parseAmount(f[iAmount] ?? "");
+    if (!date || amount == null) continue;
+    const fee = parseAmount(f[iFee] ?? "") ?? 0;
+    out.push({
+      date,
+      description: (f[iDesc] ?? "").trim(),
+      amount: Math.round((amount - Math.abs(fee)) * 100) / 100,
+    });
+  }
+  return out;
+}
+
 function parseGeneric(lines: string[]): BankTransaction[] {
   const sep = (lines[0].match(/;/g)?.length ?? 0) > (lines[0].match(/,/g)?.length ?? 0) ? ";" : ",";
   const header = splitLine(lines[0], sep).map((h) => h.trim().toLowerCase());
@@ -161,6 +194,9 @@ export function parseBankFile(text: string): ParseResult {
   } else if (first.includes("\t") && first.split("\t")[1]?.trim() === "EUR") {
     bank = "ABN AMRO";
     transactions = parseAbnAmro(lines);
+  } else if (first.includes("Started Date") && first.includes("Completed Date")) {
+    bank = "Revolut";
+    transactions = parseRevolut(lines);
   } else {
     bank = "Generiek";
     transactions = parseGeneric(lines);
@@ -199,6 +235,8 @@ function exclusionKeywords(s: FinancialState): string[] {
   const words = new Set<string>([
     "hypotheek", "verzekering", "spaarrekening", "bitvavo", "degiro", "flatex",
     "belastingdienst", "salaris",
+    // Revolut-intern: potjes, wisselen en opwaarderen zijn geen consumptie
+    "vault", "exchanged", "top-up", "topup",
   ]);
   for (const e of s.fixedExpenses) {
     for (const w of e.description.toLowerCase().split(/[^a-z0-9]+/)) {
@@ -231,6 +269,24 @@ export function aggregateExpenses(state: FinancialState, txs: BankTransaction[])
     counted++;
   }
   return { sums, counted, skippedIncome, skippedFixed, skippedOtherYear, totalExpenses };
+}
+
+// ---------------------------------------------------------------- meerdere bestanden
+
+/** Voeg transacties samen over meerdere uploads; identieke (datum, bedrag, omschrijving) tellen één keer. */
+export function mergeTransactions(
+  existing: BankTransaction[], incoming: BankTransaction[],
+): { merged: BankTransaction[]; duplicates: number } {
+  const seen = new Set(existing.map((t) => `${t.date}|${t.amount}|${t.description}`));
+  const merged = [...existing];
+  let duplicates = 0;
+  for (const t of incoming) {
+    const key = `${t.date}|${t.amount}|${t.description}`;
+    if (seen.has(key)) { duplicates++; continue; }
+    seen.add(key);
+    merged.push(t);
+  }
+  return { merged, duplicates };
 }
 
 // ---------------------------------------------------------------- abonnementen

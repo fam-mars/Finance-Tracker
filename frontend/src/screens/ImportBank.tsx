@@ -2,21 +2,25 @@ import { useRef, useState } from "react";
 import type { FinancialState, MonthKey } from "../domain/types";
 import { MONTH_KEYS } from "../domain/types";
 import {
-  aggregateExpenses, applyImportToState, detectRecurring, parseBankFile,
+  aggregateExpenses, applyImportToState, detectRecurring, mergeTransactions, parseBankFile,
 } from "../domain/bankImport";
-import type { ImportSummary, ParseResult, RecurringPayment } from "../domain/bankImport";
+import type { BankTransaction, ImportSummary, RecurringPayment } from "../domain/bankImport";
 import { Money } from "../components/ui";
 import { useSync } from "../state/SyncContext";
 
+interface LoadedFile { name: string; bank: string; count: number; duplicates: number; }
+
 /**
- * Bankimport — upload een export van ING / Rabobank / ABN AMRO (of generieke
- * CSV), bekijk de automatische categorisering en zet de uitgaven in het
- * maandoverzicht. Verwerking is 100% lokaal in de browser.
+ * Bankimport — upload exports van ING / Rabobank / ABN AMRO / Revolut (of
+ * generieke CSV), combineer meerdere rekeningen, bekijk de automatische
+ * categorisering en zet de uitgaven in het maandoverzicht.
+ * Verwerking is 100% lokaal in de browser.
  */
 export function ImportSection({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [result, setResult] = useState<ParseResult | null>(null);
+  const [files, setFiles] = useState<LoadedFile[]>([]);
+  const [txs, setTxs] = useState<BankTransaction[]>([]);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [recurring, setRecurring] = useState<RecurringPayment[]>([]);
   const [addedSubs, setAddedSubs] = useState<string[]>([]);
@@ -24,21 +28,30 @@ export function ImportSection({ state }: { state: FinancialState }) {
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
-    setError(null); setApplied(false); setResult(null); setSummary(null);
-    setRecurring([]); setAddedSubs([]);
+    setError(null); setApplied(false);
     try {
       const text = await file.text();
       const parsed = parseBankFile(text);
       if (parsed.transactions.length === 0) {
-        setError("Geen transacties gevonden. Ondersteund: ING CSV, Rabobank CSV, ABN AMRO TXT of een CSV met datum/bedrag/omschrijving-kolommen.");
+        setError(`Geen transacties gevonden in ${file.name}. Ondersteund: ING, Rabobank, ABN AMRO, Revolut of een CSV met datum/bedrag/omschrijving-kolommen.`);
         return;
       }
-      setResult(parsed);
-      setSummary(aggregateExpenses(state, parsed.transactions));
-      setRecurring(detectRecurring(parsed.transactions));
+      const { merged, duplicates } = mergeTransactions(txs, parsed.transactions);
+      setTxs(merged);
+      setFiles((prev) => [...prev, {
+        name: file.name, bank: parsed.bank,
+        count: parsed.transactions.length - duplicates, duplicates,
+      }]);
+      setSummary(aggregateExpenses(state, merged));
+      setRecurring(detectRecurring(merged));
     } catch {
       setError("Bestand kon niet gelezen worden.");
     }
+  };
+
+  const reset = () => {
+    setFiles([]); setTxs([]); setSummary(null); setRecurring([]);
+    setAddedSubs([]); setApplied(false); setError(null);
   };
 
   /** Bestaat deze merchant al (ongeveer) in de vaste lasten? */
@@ -82,31 +95,45 @@ export function ImportSection({ state }: { state: FinancialState }) {
       <section className="card">
         <h2 className="card-title">Bankafschrift importeren</h2>
         <p style={{ margin: "0 0 var(--sp-3)", fontSize: "var(--text-sm)", color: "var(--ink-soft)" }}>
-          Upload een transactie-export van je bank (ING, Rabobank of ABN AMRO). Uitgaven worden
-          automatisch gecategoriseerd en per maand in het maandoverzicht gezet — zo rekent de app
-          met je échte cijfers.
+          Upload transactie-exports van je bank(en): ING, Rabobank, ABN AMRO of Revolut.
+          Combineer meerdere rekeningen — dubbele transacties worden automatisch overgeslagen.
+          Uitgaven worden gecategoriseerd en per maand in het maandoverzicht gezet.
         </p>
         <input
           ref={fileRef}
           type="file"
           accept=".csv,.txt,.tab"
           aria-label="Kies bankexport-bestand"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }}
           style={{ display: "none" }}
         />
         <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => fileRef.current?.click()}>
-          📄 Kies bestand…
+          📄 {files.length === 0 ? "Kies bestand…" : "Nog een bestand toevoegen…"}
         </button>
+        {files.map((f, i) => (
+          <div className="row" key={i}>
+            <span className="row-label">{f.name}
+              <span className="row-sub">{f.bank}{f.duplicates > 0 ? ` · ${f.duplicates} dubbele overgeslagen` : ""}</span>
+            </span>
+            <span className="money">{f.count} tx</span>
+          </div>
+        ))}
+        {files.length > 0 && (
+          <button className="btn btn-ghost" style={{ marginTop: "var(--sp-2)", padding: "6px 0", minHeight: 0 }} onClick={reset}>
+            Opnieuw beginnen
+          </button>
+        )}
         <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
-          🔒 Je bankbestand wordt lokaal in je browser verwerkt en nergens geüpload.
+          🔒 Je bankbestanden worden lokaal in je browser verwerkt en nergens geüpload.
+          Revolut: kies in de app Statement → Excel/CSV; interne top-ups, vaults en wissels worden genegeerd.
         </p>
         {error && <div className="banner banner--error" style={{ marginTop: "var(--sp-3)" }}>{error}</div>}
       </section>
 
-      {result && summary && (
+      {summary && (
         <section className="card">
-          <h2 className="card-title">Gevonden · {result.bank}</h2>
-          <div className="row"><span className="row-label">Transacties in bestand</span><span className="money">{result.transactions.length}</span></div>
+          <h2 className="card-title">Gevonden · {files.length} bestand{files.length === 1 ? "" : "en"}</h2>
+          <div className="row"><span className="row-label">Unieke transacties</span><span className="money">{txs.length}</span></div>
           <div className="row"><span className="row-label">Meegeteld als variabele uitgave</span><span className="money">{summary.counted}</span></div>
           <div className="row">
             <span className="row-label">Overgeslagen
