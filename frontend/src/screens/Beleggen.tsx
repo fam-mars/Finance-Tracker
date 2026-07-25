@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   allocationByClass, assetClassOf, forecastTable, formatEUR, formatPct,
   portfolioDerived, totalInvestingPerMonth,
@@ -78,6 +78,8 @@ function downloadGetquinCsv(state: FinancialState) {
   URL.revokeObjectURL(url);
 }
 
+const BITVAVO_SYNC_KEY = "finance-tracker-bitvavo-sync";
+
 function Holdings({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const pf = portfolioDerived(state);
@@ -86,9 +88,9 @@ function Holdings({ state }: { state: FinancialState }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
-  const syncBitvavo = async () => {
+  const syncBitvavo = async (auto = false) => {
     setSyncing(true);
-    setSyncMsg(null);
+    if (!auto) setSyncMsg(null);
     const cryptos = state.portfolio.holdings.filter(
       (h) => assetClassOf(h.platform) === "Crypto" && h.ticker);
     let updated = 0;
@@ -99,11 +101,28 @@ function Holdings({ state }: { state: FinancialState }) {
         updated++;
       }
     }
-    setSyncMsg(updated > 0
-      ? `✓ ${updated} van ${cryptos.length} koersen bijgewerkt — druk op Opslaan om te bewaren.`
-      : "Kon geen koersen ophalen (Bitvavo niet bereikbaar).");
+    if (auto) {
+      if (updated > 0) setSyncMsg(`✓ Cryptokoersen automatisch ververst (${updated}).`);
+    } else {
+      setSyncMsg(updated > 0
+        ? `✓ ${updated} van ${cryptos.length} koersen bijgewerkt — druk op Opslaan om te bewaren.`
+        : "Kon geen koersen ophalen (Bitvavo niet bereikbaar).");
+    }
     setSyncing(false);
   };
+
+  // Workflow-automatisering: koersen verversen zichzelf stilletjes bij het
+  // openen van dit scherm, maximaal één keer per uur.
+  useEffect(() => {
+    const hasCrypto = state.portfolio.holdings.some(
+      (h) => assetClassOf(h.platform) === "Crypto" && h.ticker);
+    if (!hasCrypto) return;
+    const last = Number(localStorage.getItem(BITVAVO_SYNC_KEY) ?? 0);
+    if (Date.now() - last < 3600_000) return;
+    localStorage.setItem(BITVAVO_SYNC_KEY, String(Date.now()));
+    void syncBitvavo(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const importDegiro = async (file: File) => {
     setSyncMsg(null);

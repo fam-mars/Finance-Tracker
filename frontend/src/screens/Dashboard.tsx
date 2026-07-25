@@ -184,7 +184,20 @@ export function Dashboard({ state }: { state: FinancialState }) {
         <div className="stat">
           <div className="stat-label">Netto vermogen</div>
           <div className="stat-value"><Money value={d.netWorth} /></div>
-          <div className="stat-note">bezittingen − schulden</div>
+          <div className="stat-note">
+            {(() => {
+              const snaps = state.netWorth.snapshots;
+              const last = snaps.length > 0 ? snaps[snaps.length - 1] : null;
+              if (!last) return "bezittingen − schulden";
+              const delta = Math.round(d.netWorth - last.netWorth);
+              const fmt = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" });
+              return (
+                <span className={delta >= 0 ? "money--pos" : "money--neg"}>
+                  {delta >= 0 ? "+" : ""}{formatEUR(delta)} sinds {fmt.format(new Date(last.date))}
+                </span>
+              );
+            })()}
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">Portefeuille</div>

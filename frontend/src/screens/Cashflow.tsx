@@ -226,9 +226,14 @@ function JaarOverzicht({ cols, year }: { cols: ReturnType<typeof monthColumns>; 
         <strong className="row-label">Gespaard<span className="row-sub">spaarquote {formatPct(rate)}</span></strong>
         <strong><Money value={saved} signed /></strong>
       </div>
-      <button className="btn btn-ghost" style={{ marginTop: "var(--sp-2)", padding: "6px 0", minHeight: 0 }} onClick={exportCsv}>
-        ⬇ Exporteer jaar als CSV (Excel)
-      </button>
+      <div style={{ display: "flex", gap: "var(--sp-3)" }}>
+        <button className="btn btn-ghost" style={{ marginTop: "var(--sp-2)", padding: "6px 0", minHeight: 0 }} onClick={exportCsv}>
+          ⬇ CSV (Excel)
+        </button>
+        <button className="btn btn-ghost" style={{ marginTop: "var(--sp-2)", padding: "6px 0", minHeight: 0 }} onClick={() => window.print()}>
+          🖨 Print / PDF-rapport
+        </button>
+      </div>
     </section>
   );
 }

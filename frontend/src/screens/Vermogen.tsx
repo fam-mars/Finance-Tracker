@@ -4,7 +4,33 @@ import {
 } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
+import { PieChart } from "../components/charts";
 import { useSync } from "../state/SyncContext";
+
+const MIX_COLORS: Record<string, string> = {
+  "Betaalrekening(en)": "#8cb5b3",
+  "Spaarrekening(en)": "#5e8a88",
+  "Beleggingen": "#2d5e5c",
+  "Crypto": "#f0b429",
+  "P2P-leningen": "#c9a86f",
+  "Woning (marktwaarde)": "#a0826d",
+  "Overige bezittingen": "#999999",
+};
+
+/** Waar zit je vermogen in? Bezittingen als taartdiagram. */
+function VermogensMix({ state }: { state: FinancialState }) {
+  const nw = netWorthDerived(state);
+  const data = nw.assets
+    .filter((a) => a.value > 0)
+    .map((a) => ({ label: a.label.replace(" (marktwaarde)", ""), value: a.value, color: MIX_COLORS[a.label] ?? "#999999" }));
+  if (data.length < 2) return null;
+  return (
+    <section className="card">
+      <h2 className="card-title">Vermogensmix</h2>
+      <PieChart data={data} />
+    </section>
+  );
+}
 
 /** Verloop van de netto-vermogenspeilingen als compacte lijngrafiek. */
 function NetWorthTrend({ snapshots }: { snapshots: FinancialState["netWorth"]["snapshots"] }) {
@@ -168,6 +194,8 @@ function NetWorth({ state }: { state: FinancialState }) {
           Peiling van vandaag vastleggen
         </button>
       </section>
+
+      <VermogensMix state={state} />
 
       <section className="card">
         <h2 className="card-title">Verloop (maandelijkse peiling)</h2>

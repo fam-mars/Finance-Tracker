@@ -46,6 +46,34 @@
   --content-max: 640px; /* phone-first; centered column on larger screens */
 }
 
+/* Automatische donkere modus — volgt de systeeminstelling van het toestel.
+   Accentkaarten met eigen pastelkleuren blijven lichte "eilandjes" met hun
+   eigen donkere tekst en blijven dus leesbaar. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #101613;
+    --surface: #1a231f;
+    --surface-sunken: #242f29;
+    --ink: #e7ece9;
+    --ink-soft: #9fb0a8;
+    --line: #2e3a34;
+    --action: #4db894;
+    --action-ink: #06130e;
+    --positive: #5ecf9f;
+    --negative: #ff8a80;
+    --focus: #4db894;
+    --teal: #4db894;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
+  }
+}
+
+/* Printvriendelijk (jaarrapport → PDF): geen navigatie of knoppen, witte achtergrond. */
+@media print {
+  .tabbar, .savebar, button, input[type="file"] { display: none !important; }
+  body { background: #fff; }
+  .card, .stat { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+}
+
 * { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
