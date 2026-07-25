@@ -153,6 +153,40 @@ export function Retirement({ state }: { state: FinancialState }) {
         </div>
       </section>
 
+      {/* Coast FIRE */}
+      <section className="card" style={{ backgroundColor: "#fff8e1", borderLeft: "4px solid var(--accent)" }}>
+        <h2 className="card-title">🏖 Coast FIRE</h2>
+        {(() => {
+          const coastMonths = monthsToReachTarget(
+            d.investableNetWorth, 0, d.expectedReturnPerYear, requiredAssets);
+          if (coastMonths === 0) {
+            return <p style={{ margin: 0, fontSize: "0.9rem" }}>Je zit al op je FIRE-getal. 🎉</p>;
+          }
+          if (coastMonths == null) {
+            return (
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
+                Zonder nieuwe inleg groeit je vermogen (nog) niet vanzelf naar je FIRE-getal —
+                je maandelijkse inleg is nu de motor achter je tijdlijn.
+              </p>
+            );
+          }
+          const coastYears = coastMonths / 12;
+          return (
+            <>
+              <p style={{ margin: 0, fontSize: "0.9rem" }}>
+                Zou je <strong>vandaag stoppen met inleggen</strong>, dan groeit je huidige vermogen
+                op rendement alleen in ~<strong>{Math.ceil(coastYears)} jaar</strong> naar je FIRE-getal.
+              </p>
+              {yearsToGoal != null && coastYears > yearsToGoal && (
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "var(--ink-soft)" }}>
+                  Door te blijven inleggen ben je ~{Math.round(coastYears - yearsToGoal)} jaar eerder vrij.
+                </p>
+              )}
+            </>
+          );
+        })()}
+      </section>
+
       {/* Scenarios */}
       <section className="card">
         <h2 className="card-title">Wat als...</h2>

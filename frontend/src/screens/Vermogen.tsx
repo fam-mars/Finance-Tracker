@@ -1,8 +1,72 @@
 import { useState } from "react";
-import { formatPct, netWorthDerived, savingsGoalsDerived } from "../domain/calc";
+import {
+  BOX3_2026, box3Estimate, formatEUR, formatPct, netWorthDerived, savingsGoalsDerived,
+} from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
+
+/** Verloop van de netto-vermogenspeilingen als compacte lijngrafiek. */
+function NetWorthTrend({ snapshots }: { snapshots: FinancialState["netWorth"]["snapshots"] }) {
+  if (snapshots.length < 2) return null;
+  const w = 320, h = 110, pad = 10;
+  const values = snapshots.map((s) => s.netWorth);
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = Math.max(max - min, 1);
+  const x = (i: number) => pad + (i / (snapshots.length - 1)) * (w - 2 * pad);
+  const y = (v: number) => h - pad - ((v - min) / span) * (h - 2 * pad);
+  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const last = snapshots[snapshots.length - 1];
+  return (
+    <div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", display: "block" }} role="img"
+        aria-label={`Netto vermogen van ${formatEUR(values[0])} naar ${formatEUR(last.netWorth)} over ${snapshots.length} peilingen`}>
+        <polyline points={points} fill="none" stroke="var(--action)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(snapshots.length - 1)} cy={y(last.netWorth)} r="4" fill="var(--accent)" />
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        <span>{snapshots[0].date}</span>
+        <span>{last.date} · <strong className="money">{formatEUR(last.netWorth)}</strong></span>
+      </div>
+    </div>
+  );
+}
+
+/** Indicatie box 3-heffing volgens de forfaitaire 2026-percentages. */
+function Box3Card({ state }: { state: FinancialState }) {
+  const [partners, setPartners] = useState(state.incomes.length >= 2);
+  const r = box3Estimate(state, { ...BOX3_2026, partners });
+  return (
+    <section className="card">
+      <h2 className="card-title">Box 3 · vermogensbelasting {new Date().getFullYear()}</h2>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--text-sm)", padding: "var(--sp-2) 0" }}>
+        <input type="checkbox" checked={partners} onChange={(e) => setPartners(e.target.checked)} />
+        Fiscale partners (vrijstelling ×2)
+      </label>
+      <div className="row"><span className="row-label">Banktegoeden</span><Money value={r.savings} /></div>
+      <div className="row"><span className="row-label">Beleggingen &amp; overig</span><Money value={r.investments} /></div>
+      <div className="row"><span className="row-label">Aftrekbare schulden<span className="row-sub">excl. hypotheek, na drempel</span></span><Money value={r.deductibleDebt} /></div>
+      <div className="row"><span className="row-label">Heffingsvrij vermogen</span><Money value={r.exemption} /></div>
+      <div className="row"><span className="row-label">Belastbare grondslag</span><Money value={r.taxableBase} /></div>
+      <div className="row">
+        <strong className="row-label">Geschatte heffing per jaar
+          <span className="row-sub">{formatEUR(r.tax / 12)} per maand</span>
+        </strong>
+        <strong><Money value={r.tax} /></strong>
+      </div>
+      {r.taxableBase === 0 && (
+        <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)", color: "var(--positive)" }}>
+          🎉 Je vermogen valt binnen de vrijstelling — geen box 3-heffing.
+        </p>
+      )}
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Forfaitaire methode 2026: banktegoeden 1,28% en schulden 2,70% (voorlopig), beleggingen 6,00%,
+        vrijstelling {formatEUR(BOX3_2026.exemptionPerPerson)} p.p., tarief 36%. Eigen woning en hypotheek
+        vallen in box 1. Schatting — geen belastingadvies.
+      </p>
+    </section>
+  );
+}
 
 type Section = "vermogen" | "sparen";
 
@@ -107,9 +171,15 @@ function NetWorth({ state }: { state: FinancialState }) {
 
       <section className="card">
         <h2 className="card-title">Verloop (maandelijkse peiling)</h2>
+        <NetWorthTrend snapshots={state.netWorth.snapshots} />
         {state.netWorth.snapshots.length === 0 && (
           <p style={{ color: "var(--ink-soft)", fontSize: "var(--text-sm)", margin: 0 }}>
             Nog geen peilingen. Leg hierboven je eerste vast.
+          </p>
+        )}
+        {state.netWorth.snapshots.length === 1 && (
+          <p style={{ color: "var(--ink-soft)", fontSize: "var(--text-sm)", margin: 0 }}>
+            Eén peiling vastgelegd — na een tweede verschijnt hier je grafiek.
           </p>
         )}
         {[...state.netWorth.snapshots].reverse().map((snap) => (
@@ -119,6 +189,8 @@ function NetWorth({ state }: { state: FinancialState }) {
           </div>
         ))}
       </section>
+
+      <Box3Card state={state} />
     </>
   );
 }

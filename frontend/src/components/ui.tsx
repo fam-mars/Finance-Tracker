@@ -94,7 +94,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "cashflow", label: "Cashflow", icon: "⇄" },
   { id: "beleggen", label: "Beleggen", icon: "△" },
   { id: "retirement", label: "FIRE", icon: "🎯" },
-  { id: "optimization", label: "Optimalisatie", icon: "⚡" },
+  { id: "optimization", label: "Tips", icon: "⚡" },
   { id: "wonen", label: "Wonen", icon: "⌂" },
   { id: "vermogen", label: "Vermogen", icon: "◎" },
 ];

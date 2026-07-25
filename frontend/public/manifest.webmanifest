@@ -1,0 +1,15 @@
+{
+  "name": "Financieel Overzicht",
+  "short_name": "Financieel",
+  "description": "Huishoudfinanciën, FIRE-planning en bankimport — alles rekent automatisch.",
+  "lang": "nl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f4f1",
+  "theme_color": "#f2f4f1",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

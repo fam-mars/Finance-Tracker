@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   amortizationSchedule, debtPayoffDate, formatPct, mortgagePerYear, mortgageSummary,
-  totalDebt, totalDebtExclMortgage, totalDebtPaymentPerMonth,
+  repayVsInvest, totalDebt, totalDebtExclMortgage, totalDebtPaymentPerMonth,
 } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
@@ -110,7 +110,47 @@ function Mortgage({ state }: { state: FinancialState }) {
         <div className="row"><span className="row-label">Totale rente restant looptijd</span><Money value={sum.totalRemainingInterest} /></div>
         <div className="row"><span className="row-label">Hypotheekvrij in</span><span className="money">{sum.payoffDate ?? "—"}</span></div>
       </section>
+
+      <RepayVsInvestCard state={state} />
     </>
+  );
+}
+
+/** Extra aflossen of beleggen? Zelfde euro, twee routes, naast elkaar. */
+function RepayVsInvestCard({ state }: { state: FinancialState }) {
+  const [extra, setExtra] = useState(200);
+  const r = state.forecast.expectedReturnPerYear;
+  const cmp = repayVsInvest(state.mortgage, extra, r);
+  const investWins = cmp.investGrowth > cmp.interestSaved;
+  return (
+    <section className="card" style={{ backgroundColor: "#e3f2fd", borderLeft: "4px solid #1976d2" }}>
+      <h2 className="card-title">Extra aflossen of beleggen?</h2>
+      <div className="row">
+        <span className="row-label">Extra bedrag per maand</span>
+        <EditableNumber value={extra} ariaLabel="Extra bedrag per maand"
+          onCommit={(v) => setExtra(Math.max(v ?? 0, 0))} />
+      </div>
+      <div className="row">
+        <span className="row-label">🏠 Aflossen: rente bespaard
+          <span className="row-sub">gegarandeerd, tegen {formatPct(state.mortgage.interestRatePerYear)} · {Math.round(cmp.monthsEarlier / 12)} jaar eerder hypotheekvrij</span>
+        </span>
+        <Money value={cmp.interestSaved} />
+      </div>
+      <div className="row">
+        <span className="row-label">📈 Beleggen: verwachte groei
+          <span className="row-sub">bij {formatPct(r)} per jaar over dezelfde looptijd — niet gegarandeerd</span>
+        </span>
+        <Money value={cmp.investGrowth} />
+      </div>
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+        {investWins
+          ? "📈 Op deze aannames levert beleggen meer op — maar aflossen is een zeker rendement en verlaagt je vaste lasten."
+          : "🏠 Op deze aannames wint extra aflossen — zeker rendement én eerder hypotheekvrij."}
+      </p>
+      <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Vereenvoudigd model (geen belasting, renteaftrek of boetevrije-aflossingslimiet). Geen financieel advies.
+      </p>
+    </section>
   );
 }
 

@@ -401,6 +401,98 @@ export function savingsGoalsDerived(s: FinancialState): {
   return { goals, availablePerMonth, plannedPerMonth, freePerMonth: availablePerMonth - plannedPerMonth };
 }
 
+// ---------------------------------------------------------------- box 3 (NL vermogensbelasting)
+
+export interface Box3Params {
+  /** Heffingsvrij vermogen per persoon. */
+  exemptionPerPerson: number;
+  /** Fiscale partners → vrijstelling en schuldendrempel ×2. */
+  partners: boolean;
+  /** Forfaitair rendement banktegoeden (fractie). */
+  rateSavings: number;
+  /** Forfaitair rendement overige bezittingen/beleggingen. */
+  rateInvestments: number;
+  /** Forfaitair rendement schulden (aftrek). */
+  rateDebts: number;
+  /** Schuldendrempel per persoon. */
+  debtThresholdPerPerson: number;
+  /** Box 3-tarief. */
+  taxRate: number;
+}
+
+/** 2026: vrijstelling €59.357 p.p., tarief 36%; banktegoeden 1,28% en schulden 2,70% (voorlopig), beleggingen 6,00% (definitief). */
+export const BOX3_2026: Omit<Box3Params, "partners"> = {
+  exemptionPerPerson: 59357,
+  rateSavings: 0.0128,
+  rateInvestments: 0.06,
+  rateDebts: 0.027,
+  debtThresholdPerPerson: 3900,
+  taxRate: 0.36,
+};
+
+export interface Box3Result {
+  savings: number;            // banktegoeden (betaal + spaar)
+  investments: number;        // beleggingen + overige bezittingen
+  deductibleDebt: number;     // schulden excl. hypotheek, na drempel
+  rendementsgrondslag: number;
+  exemption: number;
+  taxableBase: number;        // grondslag sparen en beleggen
+  forfaitairRendement: number;
+  tax: number;                // per jaar
+}
+
+/**
+ * Schatting box 3 volgens de forfaitaire methode (Overbruggingswet).
+ * Eigen woning en hypotheek vallen in box 1 en tellen hier niet mee;
+ * studieschuld en overige leningen zijn aftrekbaar boven de drempel.
+ */
+export function box3Estimate(s: FinancialState, p: Box3Params): Box3Result {
+  const pf = portfolioDerived(s);
+  const m = s.netWorth.manualAssets;
+  const savings = (m.checkingAccounts ?? 0) + (m.savingsAccounts ?? 0);
+  const investments = pf.totalValue + (m.otherAssets ?? 0);
+  const mult = p.partners ? 2 : 1;
+  const deductibleDebt = Math.max(totalDebtExclMortgage(s.debts) - p.debtThresholdPerPerson * mult, 0);
+  const rendementsgrondslag = Math.max(savings + investments - deductibleDebt, 0);
+  const exemption = p.exemptionPerPerson * mult;
+  const taxableBase = Math.max(rendementsgrondslag - exemption, 0);
+  const forfaitairRendement = Math.max(
+    savings * p.rateSavings + investments * p.rateInvestments - deductibleDebt * p.rateDebts, 0);
+  const share = rendementsgrondslag > 0 ? taxableBase / rendementsgrondslag : 0;
+  const tax = Math.round(forfaitairRendement * share * p.taxRate * 100) / 100;
+  return { savings, investments, deductibleDebt, rendementsgrondslag, exemption, taxableBase, forfaitairRendement, tax };
+}
+
+// ---------------------------------------------------------------- extra aflossen vs beleggen
+
+export interface RepayVsInvest {
+  interestSaved: number;   // gegarandeerd bespaarde hypotheekrente
+  monthsEarlier: number;   // zoveel eerder hypotheekvrij
+  horizonMonths: number;   // resterende looptijd zonder extra aflossing
+  invested: number;        // totaal ingelegd bij beleggen
+  investEndValue: number;  // verwachte eindwaarde bij beleggen
+  investGrowth: number;    // verwachte groei boven inleg
+}
+
+/** Vergelijk €X p/m extra aflossen (rente bespaard, eerder vrij) met hetzelfde bedrag beleggen. */
+export function repayVsInvest(m: MortgageInputs, extraPerMonth: number, returnPerYear: number): RepayVsInvest {
+  const base = amortizationSchedule(m);
+  const withExtra = amortizationSchedule({
+    ...m, extraRepaymentPerMonth: m.extraRepaymentPerMonth + extraPerMonth,
+  });
+  const interestSaved =
+    base.reduce((t, r) => t + r.interest, 0) - withExtra.reduce((t, r) => t + r.interest, 0);
+  const horizonMonths = base.length;
+  const rMonth = returnPerYear / 12;
+  let investEndValue = 0;
+  for (let i = 0; i < horizonMonths; i++) investEndValue = investEndValue * (1 + rMonth) + extraPerMonth;
+  const invested = extraPerMonth * horizonMonths;
+  return {
+    interestSaved, monthsEarlier: base.length - withExtra.length, horizonMonths,
+    invested, investEndValue, investGrowth: investEndValue - invested,
+  };
+}
+
 // ---------------------------------------------------------------- dashboard rollup
 
 /** Everything the dashboard shows, in one derived object. */
