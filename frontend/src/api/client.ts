@@ -11,8 +11,11 @@ import type { FinancialState, StateEnvelope } from "../domain/types";
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
+/** Is er een backend geconfigureerd? Zo niet, dan is localStorage de bron van waarheid. */
+export const HAS_BACKEND = BASE.length > 0;
+
 // Complete mock data extracted from Financieel_Overzicht_2.0.xlsx
-const MOCK_STATE: FinancialState = {
+export const MOCK_STATE: FinancialState = {
   schemaVersion: 1,
   meta: {
     title: "Financieel Overzicht 2.0",
@@ -156,23 +159,17 @@ function headers(extra: Record<string, string> = {}): HeadersInit {
   return h;
 }
 
-/** GET the full document. Falls back to mock data if backend unavailable. */
+/**
+ * GET the full document from the backend. Throws when no backend is
+ * configured or the fetch fails — the caller (SyncContext) decides the
+ * fallback. Cruciaal: hier NOOIT stilletjes mockdata teruggeven, anders
+ * overschrijft elke page-load de lokaal opgeslagen gegevens.
+ */
 export async function fetchState(): Promise<StateEnvelope> {
-  // If no API URL configured, use mock data
-  if (!BASE) {
-    console.warn("No VITE_API_BASE_URL configured; using mock data");
-    return { revision: 1, updatedAt: new Date().toISOString(), state: MOCK_STATE };
-  }
-
-  try {
-    const res = await fetch(`${BASE}/api/state`, { headers: headers() });
-    if (!res.ok) throw new ApiError(res.status, `Laden mislukt (${res.status})`);
-    return (await res.json()) as StateEnvelope;
-  } catch (e) {
-    // Fall back to mock data if fetch fails
-    console.warn("Failed to fetch from API, using mock data:", e instanceof Error ? e.message : e);
-    return { revision: 1, updatedAt: new Date().toISOString(), state: MOCK_STATE };
-  }
+  if (!BASE) throw new LocalStorageFallbackError("Geen backend geconfigureerd");
+  const res = await fetch(`${BASE}/api/state`, { headers: headers() });
+  if (!res.ok) throw new ApiError(res.status, `Laden mislukt (${res.status})`);
+  return (await res.json()) as StateEnvelope;
 }
 
 /**

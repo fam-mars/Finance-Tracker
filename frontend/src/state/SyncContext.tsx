@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { FinancialState } from "../domain/types";
-import { ConflictError, fetchState, saveState } from "../api/client";
+import { ConflictError, HAS_BACKEND, MOCK_STATE, fetchState, saveState } from "../api/client";
 
 const STORAGE_KEY = "finance-tracker-state";
 
@@ -59,9 +59,26 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [dirty, setDirty] = useState(false);
   const revisionRef = useRef(0);
 
+  /**
+   * Bron van waarheid zonder backend: localStorage. Mockdata is alléén het
+   * zaadje voor de allereerste run en mag opgeslagen gegevens nooit
+   * overschrijven. Met backend: eerst backend, bij falen localStorage.
+   */
   const load = useCallback(async () => {
     setStatus("loading");
     setErrorMessage(null);
+    const local = getLocalState();
+
+    if (!HAS_BACKEND) {
+      const seed = local ?? { state: MOCK_STATE, revision: 1 };
+      revisionRef.current = seed.revision;
+      setState(seed.state);
+      if (!local) saveLocalState(seed.state, seed.revision);
+      setDirty(false);
+      setStatus("ready");
+      return;
+    }
+
     try {
       const envl = await fetchState();
       revisionRef.current = envl.revision;
@@ -70,11 +87,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setDirty(false);
       setStatus("ready");
     } catch (e) {
-      const localData = getLocalState();
-      if (localData) {
-        revisionRef.current = localData.revision;
-        setState(localData.state);
-        setErrorMessage("Backend niet bereikbaar. Gebruik locale opslag.");
+      if (local) {
+        revisionRef.current = local.revision;
+        setState(local.state);
+        setErrorMessage("Backend niet bereikbaar — je werkt met de lokaal opgeslagen versie.");
         setStatus("ready");
       } else {
         setErrorMessage(e instanceof Error ? e.message : "Onbekende fout");
@@ -90,8 +106,24 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setDirty(true);
   }, []);
 
+  // Autosave: elke wijziging gaat direct naar localStorage, zodat er ook
+  // zonder druk op Opslaan nooit iets verloren gaat (tab dicht, crash, etc.).
+  useEffect(() => {
+    if (state && status !== "loading") saveLocalState(state, revisionRef.current);
+  }, [state, status]);
+
   const save = useCallback(async () => {
     if (!state) return;
+
+    // Zonder backend is opslaan een lokale bevestiging — direct klaar.
+    if (!HAS_BACKEND) {
+      saveLocalState(state, revisionRef.current);
+      setDirty(false);
+      setStatus("ready");
+      setErrorMessage(null);
+      return;
+    }
+
     setStatus("saving");
     setErrorMessage(null);
     try {
@@ -101,11 +133,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       saveLocalState(envl.state, envl.revision);
       setDirty(false);
       setStatus("ready");
-      if (import.meta.env.DEV) console.log("Saved to backend and localStorage");
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      if (import.meta.env.DEV) console.log("Save failed, falling back to localStorage:", errorMsg);
-
       if (e instanceof ConflictError) {
         setStatus("conflict");
         setErrorMessage(
@@ -115,7 +143,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         saveLocalState(state, revisionRef.current);
         setDirty(false);
         setStatus("ready");
-        setErrorMessage("Wijziging opgeslagen lokaal (backend niet bereikbaar)");
+        setErrorMessage("Backend niet bereikbaar — wijziging lokaal opgeslagen.");
       }
     }
   }, [state]);
