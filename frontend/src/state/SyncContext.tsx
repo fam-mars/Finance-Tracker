@@ -89,6 +89,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setStatus("loading");
     setErrorMessage(null);
 
+    // Gedeelde demo-link (?demo=1) activeert de demo-modus direct.
+    if (new URLSearchParams(window.location.search).has("demo")) {
+      sessionStorage.setItem(DEMO_FLAG_KEY, "1");
+    }
+
     // Actieve demo (bijv. na een refresh midden in een demo) heeft voorrang:
     // er mogen dan nooit echte cijfers op het scherm verschijnen.
     if (sessionStorage.getItem(DEMO_FLAG_KEY)) {

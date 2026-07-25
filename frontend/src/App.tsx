@@ -10,11 +10,16 @@ import { Vermogen } from "./screens/Vermogen";
 import { Retirement } from "./screens/Retirement";
 import { Optimization } from "./screens/Optimization";
 import { Onboarding } from "./screens/Onboarding";
+import { CheckIn, CheckinReminder } from "./screens/CheckIn";
+
+/** Geopend via een gedeelde ?demo=1-link: pin overslaan, maar exit naar echte data verbergen. */
+const DEMO_LINK = new URLSearchParams(window.location.search).has("demo");
 
 function Shell() {
   const { status, errorMessage, state, reload, demo, exitDemo } = useSync();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showCheckin, setShowCheckin] = useState(false);
 
   if (status === "loading" && !state) {
     return <main className="screen"><p style={{ color: "var(--ink-soft)" }}>Laden…</p></main>;
@@ -32,6 +37,9 @@ function Shell() {
   if (showOnboarding) {
     return <Onboarding onComplete={() => setShowOnboarding(false)} />;
   }
+  if (showCheckin) {
+    return <CheckIn onComplete={() => setShowCheckin(false)} />;
+  }
 
   return (
     <>
@@ -42,15 +50,18 @@ function Shell() {
             display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-2)",
           }}>
             <span>🎭 <strong>Demo-modus</strong> — fictieve gegevens</span>
-            <button onClick={exitDemo} style={{
-              border: "none", borderRadius: "var(--radius-sm)", padding: "6px 12px",
-              backgroundColor: "#4527a0", color: "#fff", fontWeight: 600, fontSize: "var(--text-xs)",
-            }}>
-              Naar echte gegevens
-            </button>
+            {!DEMO_LINK && (
+              <button onClick={exitDemo} style={{
+                border: "none", borderRadius: "var(--radius-sm)", padding: "6px 12px",
+                backgroundColor: "#4527a0", color: "#fff", fontWeight: 600, fontSize: "var(--text-xs)",
+              }}>
+                Naar echte gegevens
+              </button>
+            )}
           </div>
         </div>
       )}
+      {tab === "dashboard" && !demo && <CheckinReminder onStart={() => setShowCheckin(true)} />}
       {status === "error" && errorMessage && (
         <div className="screen" style={{ paddingBottom: 0 }}>
           <div className="banner banner--error">{errorMessage}</div>
@@ -105,6 +116,8 @@ function Shell() {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(() => {
+    // Een gedeelde demo-link toont uitsluitend fictieve data → geen pin nodig.
+    if (DEMO_LINK) return true;
     // Check if auth is disabled or already authenticated
     const authMode = import.meta.env.VITE_AUTH_MODE;
     const authCode = import.meta.env.VITE_AUTH_CODE;

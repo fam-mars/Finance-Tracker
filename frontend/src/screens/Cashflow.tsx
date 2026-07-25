@@ -191,6 +191,48 @@ function AddFixedExpense() {
   );
 }
 
+/** Jaartotalen t/m de huidige maand + CSV-export van het hele maandoverzicht. */
+function JaarOverzicht({ cols, year }: { cols: ReturnType<typeof monthColumns>; year: number }) {
+  const uptoIdx = new Date().getMonth();
+  const ytd = cols.slice(0, uptoIdx + 1);
+  const income = ytd.reduce((t, c) => t + c.income, 0);
+  const spent = ytd.reduce((t, c) => t + c.totalSpent, 0);
+  const invested = ytd.reduce((t, c) => t + c.invested, 0);
+  const saved = ytd.reduce((t, c) => t + c.saved, 0);
+  const rate = income > 0 ? saved / income : 0;
+
+  const exportCsv = () => {
+    const rows = [
+      ["maand", "inkomsten", "vaste lasten", "variabel", "belegd", "gespaard", "cumulatief gespaard"],
+      ...cols.map((c) => [c.month, c.income, c.fixed, c.variable, c.invested,
+        Math.round(c.saved * 100) / 100, Math.round(c.cumulativeSaved * 100) / 100]),
+    ];
+    const csv = rows.map((r) => r.join(";")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `maandoverzicht-${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section className="card">
+      <h2 className="card-title">Jaaroverzicht {year} · t/m {MONTH_KEYS[uptoIdx]}</h2>
+      <div className="row"><span className="row-label">Inkomsten</span><Money value={income} /></div>
+      <div className="row"><span className="row-label">Uitgegeven (vast + variabel)</span><Money value={spent} /></div>
+      <div className="row"><span className="row-label">Belegd</span><Money value={invested} /></div>
+      <div className="row">
+        <strong className="row-label">Gespaard<span className="row-sub">spaarquote {formatPct(rate)}</span></strong>
+        <strong><Money value={saved} signed /></strong>
+      </div>
+      <button className="btn btn-ghost" style={{ marginTop: "var(--sp-2)", padding: "6px 0", minHeight: 0 }} onClick={exportCsv}>
+        ⬇ Exporteer jaar als CSV (Excel)
+      </button>
+    </section>
+  );
+}
+
 /** 12-maands staafdiagram van het maandresultaat (gespaard); groen positief, rood negatief. */
 function SpaarTrend({ cols, activeMonth }: { cols: ReturnType<typeof monthColumns>; activeMonth: MonthKey }) {
   const w = 320, h = 100, pad = 6, labelH = 14;
@@ -417,6 +459,8 @@ function MonthOverview({ state }: { state: FinancialState }) {
         <h2 className="card-title">Gespaard per maand</h2>
         <SpaarTrend cols={cols} activeMonth={month} />
       </section>
+
+      <JaarOverzicht cols={cols} year={state.monthOverview.year} />
 
       <section className="card">
         <h2 className="card-title">Resultaat {month}</h2>

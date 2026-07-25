@@ -263,7 +263,11 @@ function Goals({ state }: { state: FinancialState }) {
             <span>
               <Money value={goal.stillNeeded} />
               {goal.monthsToGo != null && (
-                <span className="row-sub" style={{ display: "inline" }}> · {goal.monthsToGo} mnd</span>
+                <span className="row-sub" style={{ display: "inline" }}>
+                  {" "}· {goal.monthsToGo} mnd (
+                  {new Intl.DateTimeFormat("nl-NL", { month: "short", year: "numeric" })
+                    .format(new Date(new Date().setMonth(new Date().getMonth() + goal.monthsToGo)))})
+                </span>
               )}
             </span>
           </div>

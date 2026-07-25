@@ -6,6 +6,40 @@ import { Geldstroom, Money, Pct } from "../components/ui";
 import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
 import { useSync } from "../state/SyncContext";
 
+/** Wat gaat er de komende 7 dagen van je rekening af? Uit de incassodagen van de vaste lasten. */
+function UpcomingDebits({ state }: { state: FinancialState }) {
+  const today = new Date().getDate();
+  const upcoming = state.fixedExpenses
+    .filter((e) => e.payDay != null && e.amountPerMonth > 0)
+    .map((e) => {
+      // dagen tot incasso, over de maandgrens heen (verkort naar 28 voor korte maanden)
+      const day = Math.min(e.payDay!, 28);
+      const inDays = day >= today ? day - today : day + 28 - today;
+      return { ...e, inDays };
+    })
+    .filter((e) => e.inDays <= 7)
+    .sort((a, b) => a.inDays - b.inDays);
+  if (upcoming.length === 0) return null;
+  const total = upcoming.reduce((t, e) => t + e.amountPerMonth, 0);
+  return (
+    <section className="card">
+      <h2 className="card-title">Komende 7 dagen van je rekening</h2>
+      {upcoming.map((e) => (
+        <div className="row" key={e.id}>
+          <span className="row-label">{e.description}
+            <span className="row-sub">{e.inDays === 0 ? "vandaag" : e.inDays === 1 ? "morgen" : `over ${e.inDays} dagen`}</span>
+          </span>
+          <Money value={e.amountPerMonth} cents />
+        </div>
+      ))}
+      <div className="row">
+        <strong className="row-label">Totaal</strong>
+        <strong><Money value={total} cents /></strong>
+      </div>
+    </section>
+  );
+}
+
 /** Demo-knop: laat de app zien met fictieve cijfers, zonder eigen gegevens bloot te geven. */
 function DemoButton() {
   const { demo, enterDemo } = useSync();
@@ -141,6 +175,8 @@ export function Dashboard({ state }: { state: FinancialState }) {
           <Money value={d.setAsidePerYear} /> per jaar opzij.
         </p>
       </section>
+
+      <UpcomingDebits state={state} />
 
       <HealthCard state={state} />
 
