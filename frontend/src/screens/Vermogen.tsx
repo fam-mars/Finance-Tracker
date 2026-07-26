@@ -4,30 +4,52 @@ import {
 } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { DeleteChip, EditableNumber, Money, Segments } from "../components/ui";
-import { PieChart } from "../components/charts";
+import { StackedBar } from "../components/charts";
 import { useSync } from "../state/SyncContext";
 
+/**
+ * Vaste kleur per vermogenscategorie (--viz-slots, gevalideerde volgorde).
+ * Kleur volgt de categorie: de woning-toggle herkleurt de rest dus niet.
+ */
 const MIX_COLORS: Record<string, string> = {
-  "Betaalrekening(en)": "#8cb5b3",
-  "Spaarrekening(en)": "#5e8a88",
-  "Beleggingen": "#2d5e5c",
-  "Crypto": "#f0b429",
-  "P2P-leningen": "#c9a86f",
-  "Woning (marktwaarde)": "#a0826d",
-  "Overige bezittingen": "#999999",
+  "Betaalrekening(en)": "var(--viz-1)",
+  "Spaarrekening(en)": "var(--viz-2)",
+  "Beleggingen": "var(--viz-3)",
+  "Crypto": "var(--viz-4)",
+  "P2P-leningen": "var(--viz-5)",
+  "Overige bezittingen": "var(--viz-6)",
+  "Woning (marktwaarde)": "var(--viz-7)",
 };
 
-/** Waar zit je vermogen in? Bezittingen als taartdiagram. */
+/**
+ * Waar zit je vermogen in? Gestapelde balk in plaats van taart: bij een
+ * koopwoning is de woning al snel ±90% en verdwijnt de rest in sliertjes.
+ * Daarom standaard zónder woning (de mix waar je iets aan kunt doen),
+ * met een schakelaar om de woning mee te tellen.
+ */
 function VermogensMix({ state }: { state: FinancialState }) {
+  const [metWoning, setMetWoning] = useState(false);
   const nw = netWorthDerived(state);
-  const data = nw.assets
+  const segments = nw.assets
     .filter((a) => a.value > 0)
-    .map((a) => ({ label: a.label.replace(" (marktwaarde)", ""), value: a.value, color: MIX_COLORS[a.label] ?? "#999999" }));
-  if (data.length < 2) return null;
+    .filter((a) => metWoning || a.label !== "Woning (marktwaarde)")
+    .map((a) => ({
+      label: a.label.replace(" (marktwaarde)", ""),
+      value: a.value,
+      color: MIX_COLORS[a.label] ?? "var(--viz-6)",
+    }));
+  if (segments.length < 2) return null;
+  const total = segments.reduce((t, s) => t + s.value, 0);
   return (
     <section className="card">
-      <h2 className="card-title">Vermogensmix</h2>
-      <PieChart data={data} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--sp-2)" }}>
+        <h2 className="card-title">Vermogensmix · {formatEUR(total)}</h2>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)", color: "var(--ink-soft)", whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={metWoning} onChange={(e) => setMetWoning(e.target.checked)} />
+          incl. woning
+        </label>
+      </div>
+      <StackedBar segments={segments} ariaLabel={`Vermogensmix van ${formatEUR(total)}${metWoning ? " inclusief woning" : " exclusief woning"}`} />
     </section>
   );
 }

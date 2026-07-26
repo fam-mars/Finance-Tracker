@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   fixedExpensesByCategory, formatEUR, formatPct, monthColumns,
   totalFixedExpensesPerMonth, totalIncomePerMonth,
@@ -508,6 +508,15 @@ function MonthOverview({ state }: { state: FinancialState }) {
   const cols = monthColumns(state);
   const col = cols.find((c) => c.month === month)!;
 
+  // Twaalf maanden passen niet op 390px: scroll de actieve maand in beeld,
+  // zodat zichtbaar is dat de kiezer horizontaal scrollt.
+  const monthPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    monthPickerRef.current
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, []);
+
   const addVariableExpense = () => {
     if (!newCategory.trim()) return;
     const id = `var-${Date.now()}`;
@@ -533,7 +542,7 @@ function MonthOverview({ state }: { state: FinancialState }) {
 
   return (
     <>
-      <div className="segments" role="group" aria-label="Kies maand">
+      <div className="segments" role="group" aria-label="Kies maand" ref={monthPickerRef}>
         {MONTH_KEYS.map((m) => (
           <button key={m} className="segment" aria-pressed={month === m} onClick={() => setMonth(m)}>
             {m}

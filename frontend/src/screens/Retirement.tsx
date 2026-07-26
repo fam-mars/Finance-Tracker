@@ -193,8 +193,10 @@ export function Retirement({ state }: { state: FinancialState }) {
         {scenarios.map((scenario, i) => (
           <div key={i} className="row" style={{ fontSize: "0.9rem" }}>
             <span className="row-label">{scenario.label}</span>
-            <span style={{ color: scenario.yearsSaved && scenario.yearsSaved > 0 ? "#2e7d32" : "var(--ink)" }}>
-              {scenario.yearsSaved != null && scenario.yearsSaved > 0 ? `-${scenario.yearsSaved.toFixed(1)} jaar` : "−"}
+            <span className="money" style={{ color: scenario.yearsSaved && scenario.yearsSaved > 0 ? "var(--positive)" : "var(--ink)" }}>
+              {scenario.yearsSaved != null && scenario.yearsSaved > 0
+                ? `−${scenario.yearsSaved.toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} jaar`
+                : "−"}
             </span>
           </div>
         ))}

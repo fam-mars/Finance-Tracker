@@ -22,6 +22,19 @@
   --focus: #0e5c4a;
   --teal: #0e5c4a;         /* alias for --action, used by auth/charts/FIRE screens */
 
+  /* Grafiekkleuren (categorisch, vaste volgorde — nooit hergebruiken of
+     doorschuiven). Gevalideerd op kleurenblindheid en contrast tegen de
+     kaartachtergrond in beide modi; legenda met bedragen is het vangnet
+     voor de lichtere tinten. Kleur volgt de categorie, nooit de rangorde. */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-track: #e9ede8;    /* rail achter staafjes */
+
   /* type */
   --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
@@ -64,12 +77,18 @@
     --focus: #4db894;
     --teal: #4db894;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
+    /* dezelfde zeven tinten, gestapt voor het donkere kaartvlak */
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --viz-4: #c98500;
+    --viz-5: #d55181;
+    --viz-6: #008300;
+    --viz-7: #9085e9;
+    --viz-track: #242f29;
   }
 }
 
-/* Dashboardgrafieken: gestapeld op smalle schermen, naast elkaar vanaf 480px. */
-.chart-grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); margin-top: var(--sp-4); }
-@media (min-width: 480px) { .chart-grid { grid-template-columns: 1fr 1fr; } }
 
 /* Gedeelde verwijder-chip: consistent én een fatsoenlijk touch-target. */
 .chip-danger {

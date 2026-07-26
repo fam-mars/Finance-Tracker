@@ -4,7 +4,7 @@ import { parseBackup, serializeBackup } from "../domain/backup";
 import type { FinancialState } from "../domain/types";
 import { MONTH_KEYS } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
-import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
+import { CategoryBreakdown } from "../components/charts";
 import { useSync } from "../state/SyncContext";
 
 /** Wat gaat er de komende 7 dagen van je rekening af? Uit de incassodagen van de vaste lasten. */
@@ -286,16 +286,11 @@ export function Dashboard({ state }: { state: FinancialState }) {
         })()}
       </div>
 
-      <div className="chart-grid">
-        <IncomeExpenseComparison state={state} />
+      {/* "Inkomsten vs lasten" en "Schulden" als grafiek waren dubbelop: de
+          Geldstroom-balk en de Wonen-kaart tonen precies die cijfers al. */}
+      <div style={{ marginTop: "var(--sp-4)" }}>
         <CategoryBreakdown state={state} />
       </div>
-
-      {state.debts.length > 0 && (
-        <div style={{ marginTop: "var(--sp-3)" }}>
-          <DebtSummary state={state} />
-        </div>
-      )}
 
       <section className="card" style={{ marginTop: "var(--sp-4)" }} aria-labelledby="home-title">
         <h2 className="card-title" id="home-title">Wonen</h2>

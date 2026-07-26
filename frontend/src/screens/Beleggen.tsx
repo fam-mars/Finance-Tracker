@@ -148,9 +148,11 @@ function Holdings({ state }: { state: FinancialState }) {
     <>
       <section className="card">
         <h2 className="card-title">Koppelingen</h2>
-        <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+        {/* Grid met vaste kolommen: knoplabels ("Bezig…") wisselen van lengte
+            zonder dat de knoppen van maat veranderen of afkappen. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-2)" }}>
           <button className="btn btn-primary" disabled={syncing} onClick={() => void syncBitvavo()}>
-            {syncing ? "Bezig…" : "🔄 Bitvavo koersen"}
+            {syncing ? "Bezig met ophalen…" : "🔄 Bitvavo koersen"}
           </button>
           <input ref={degiroRef} type="file" accept=".csv" style={{ display: "none" }}
             aria-label="DeGiro Portfolio.csv"
@@ -158,7 +160,7 @@ function Holdings({ state }: { state: FinancialState }) {
           <button className="btn btn-primary" onClick={() => degiroRef.current?.click()}>
             📥 DeGiro CSV
           </button>
-          <button className="btn btn-ghost" onClick={() => downloadGetquinCsv(state)}>
+          <button className="btn btn-ghost" style={{ gridColumn: "1 / -1" }} onClick={() => downloadGetquinCsv(state)}>
             ⬇ getquin-export
           </button>
         </div>
