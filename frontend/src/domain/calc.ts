@@ -1,10 +1,13 @@
 /**
  * calc.ts — every formula from Financieel_Overzicht_2_0.xlsx, as pure functions.
  *
- * The backend stores inputs only; the UI derives everything below on render.
- * All functions are pure and unit-testable. Percentages are fractions
- * (0.038 = 3.8%). Money is in euros as plain numbers; format at the edge
- * with formatEUR().
+ * Sinds de backend-refactor is dit een façade: dezelfde formules bestaan ook
+ * in backend/Domain/Calc.cs. Elke functie die uit het statusdocument rekent
+ * kijkt eerst of er een door de server berekende bundel klaarstaat (zie
+ * engine.ts, gevuld door SyncContext achter de feature-flag) en rekent anders
+ * lokaal — identieke formules, dus zonder backend verandert er niets.
+ * Houd beide kanten in lockstep. Percentages are fractions (0.038 = 3.8%).
+ * Money is in euros as plain numbers; format at the edge with formatEUR().
  */
 
 import type {
@@ -17,6 +20,7 @@ import type {
   SavingsGoal,
 } from "./types";
 import { MONTH_KEYS } from "./types";
+import { serverBundle } from "./engine";
 
 // ---------------------------------------------------------------- formatting
 
@@ -37,22 +41,28 @@ export const formatPct = (fraction: number) => pct1.format(fraction);
 
 /** Dashboard: INKOMSTEN P/M — sum of income sources. */
 export const totalIncomePerMonth = (s: FinancialState) =>
+  serverBundle(s)?.totals.incomePerMonth ??
   s.incomes.reduce((t, i) => t + i.amountPerMonth, 0);
 
 /** Dashboard: VASTE LASTEN P/M — sum incl. negative refund lines. */
 export const totalFixedExpensesPerMonth = (s: FinancialState) =>
+  serverBundle(s)?.totals.fixedPerMonth ??
   s.fixedExpenses.reduce((t, e) => t + e.amountPerMonth, 0);
 
 /** Dashboard: BELEGGEN P/M — total planned monthly investment contribution. */
 export const totalInvestingPerMonth = (s: FinancialState) =>
+  serverBundle(s)?.totals.investingPerMonth ??
   s.portfolio.monthlyContributions.reduce((t, c) => t + c.amountPerMonth, 0);
 
 /** Dashboard: SPAARRUIMTE P/M = income − fixed − investing. */
 export const savingsRoomPerMonth = (s: FinancialState) =>
+  serverBundle(s)?.totals.savingsRoomPerMonth ??
   totalIncomePerMonth(s) - totalFixedExpensesPerMonth(s) - totalInvestingPerMonth(s);
 
 /** Dashboard: SPAARQUOTE = savings room / income (investing excluded, as in the sheet). */
 export function savingsRate(s: FinancialState): number {
+  const sb = serverBundle(s);
+  if (sb) return sb.totals.savingsRate;
   const income = totalIncomePerMonth(s);
   if (income <= 0) return 0;
   return savingsRoomPerMonth(s) / income;
@@ -60,14 +70,25 @@ export function savingsRate(s: FinancialState): number {
 
 /** Dashboard: OPZIJ PER JAAR = 12 × (investing + savings room). */
 export const setAsidePerYear = (s: FinancialState) =>
+  serverBundle(s)?.totals.setAsidePerYear ??
   12 * (totalInvestingPerMonth(s) + savingsRoomPerMonth(s));
 
 /** Sum of budgeted variable expenses (restaurant, boodschappen extra, etc). */
 export const totalVariableExpensesPerMonth = (s: FinancialState) =>
+  serverBundle(s)?.totals.variablePerMonth ??
   s.monthOverview.variableExpenses.reduce((t, c) => t + (c.budgetPerMonth ?? 0), 0);
 
+export interface CategoryRow {
+  category: string;
+  perMonth: number;
+  perYear: number;
+  share: number;
+}
+
 /** Fixed expenses grouped by category, sorted descending, incl. share of total. */
-export function fixedExpensesByCategory(s: FinancialState) {
+export function fixedExpensesByCategory(s: FinancialState): CategoryRow[] {
+  const sb = serverBundle(s);
+  if (sb) return sb.fixedByCategory;
   const total = totalFixedExpensesPerMonth(s);
   const map = new Map<string, number>();
   for (const e of s.fixedExpenses) {
@@ -99,6 +120,8 @@ export interface MonthColumn {
 
 /** Maandoverzicht: per-month budget vs actuals, spaarquote and cumulative savings. */
 export function monthColumns(s: FinancialState): MonthColumn[] {
+  const sb = serverBundle(s);
+  if (sb) return sb.monthColumns;
   const income = totalIncomePerMonth(s);
   const fixed = totalFixedExpensesPerMonth(s);
   const invested = totalInvestingPerMonth(s);
@@ -127,14 +150,18 @@ export interface HoldingDerived extends Holding {
   allocation: number;
 }
 
-/** Portefeuille: invested, value, result and allocation per holding. */
-export function portfolioDerived(s: FinancialState): {
+export interface PortfolioData {
   holdings: HoldingDerived[];
   totalInvested: number;
   totalValue: number;
   totalResultEur: number;
   totalResultPct: number | null;
-} {
+}
+
+/** Portefeuille: invested, value, result and allocation per holding. */
+export function portfolioDerived(s: FinancialState): PortfolioData {
+  const sb = serverBundle(s);
+  if (sb) return sb.portfolio;
   const base = s.portfolio.holdings.map((h) => {
     const invested = (h.quantity ?? 0) * (h.avgBuyPrice ?? 0);
     const value = (h.quantity ?? 0) * (h.currentPrice ?? 0);
@@ -168,8 +195,16 @@ export function assetClassOf(platform: string): AssetClass {
   return "Overig";
 }
 
+export interface AllocationSlice {
+  klass: AssetClass;
+  value: number;
+  share: number;
+}
+
 /** Portefeuilleverdeling per beleggingsklasse. */
-export function allocationByClass(s: FinancialState): { klass: AssetClass; value: number; share: number }[] {
+export function allocationByClass(s: FinancialState): AllocationSlice[] {
+  const sb = serverBundle(s);
+  if (sb) return sb.allocation;
   const pf = portfolioDerived(s);
   const map = new Map<AssetClass, number>();
   for (const h of pf.holdings) {
@@ -201,6 +236,16 @@ export function forecastTable(
   f: ForecastAssumptions,
   defaults: { startValue: number; monthlyContribution: number },
 ): ForecastYearRow[] {
+  // Serverbundel alleen gebruiken als de aanroeper dezelfde defaults hanteert
+  // als waarmee de server rekende (portefeuillewaarde + maandinleg).
+  const sb = serverBundle(f);
+  if (
+    sb &&
+    Math.abs(sb.forecastDefaults.startValue - defaults.startValue) < 0.005 &&
+    Math.abs(sb.forecastDefaults.monthlyContribution - defaults.monthlyContribution) < 0.005
+  ) {
+    return sb.forecast;
+  }
   const start = f.startValueOverride ?? defaults.startValue;
   const monthly = f.monthlyContributionOverride ?? defaults.monthlyContribution;
   const rMonth = f.expectedReturnPerYear / 12;
@@ -275,6 +320,10 @@ export function annuityPayment(principal: number, ratePerYear: number, years: nu
 
 /** Hypotheek & Woning: full monthly amortization schedule incl. extra repayments. */
 export function amortizationSchedule(m: MortgageInputs): AmortizationRow[] {
+  // Cache-hit alleen voor het originele hypotheekobject uit het document;
+  // wat-als-varianten (bijv. extra aflossen via spread) rekenen altijd lokaal.
+  const sb = serverBundle(m);
+  if (sb) return sb.mortgage.schedule;
   const payment = m.monthlyPaymentOverride ?? annuityPayment(
     m.principalRemaining, m.interestRatePerYear, m.remainingTermYears);
   const i = m.interestRatePerYear / 12;
@@ -314,6 +363,8 @@ export interface MortgageSummary {
 
 /** Hypotheek & Woning: kerngetallen. */
 export function mortgageSummary(m: MortgageInputs): MortgageSummary {
+  const sb = serverBundle(m);
+  if (sb) return sb.mortgage.summary;
   const computedAnnuity = annuityPayment(m.principalRemaining, m.interestRatePerYear, m.remainingTermYears);
   const usedPayment = m.monthlyPaymentOverride ?? computedAnnuity;
   const schedule = amortizationSchedule(m);
@@ -331,8 +382,16 @@ export function mortgageSummary(m: MortgageInputs): MortgageSummary {
   };
 }
 
+export interface MortgageYearRow {
+  year: number;
+  balance: number;
+  equity: number;
+}
+
 /** Restschuld + overwaarde per year (for the year chart), derived from the schedule. */
-export function mortgagePerYear(m: MortgageInputs) {
+export function mortgagePerYear(m: MortgageInputs): MortgageYearRow[] {
+  const sb = serverBundle(m);
+  if (sb) return sb.mortgage.perYear;
   const schedule = amortizationSchedule(m);
   const out = [{ year: 0, balance: m.principalRemaining, equity: m.homeMarketValue - m.principalRemaining }];
   for (let y = 1; y * 12 <= schedule.length; y++) {
@@ -345,12 +404,15 @@ export function mortgagePerYear(m: MortgageInputs) {
 // ---------------------------------------------------------------- debts
 
 export const totalDebt = (debts: Debt[]) =>
+  serverBundle(debts)?.totals.debtTotal ??
   debts.reduce((t, d) => t + d.principalRemaining, 0);
 
 export const totalDebtExclMortgage = (debts: Debt[]) =>
+  serverBundle(debts)?.totals.debtExclMortgage ??
   debts.filter((d) => !d.linkedToMortgage).reduce((t, d) => t + d.principalRemaining, 0);
 
 export const totalDebtPaymentPerMonth = (debts: Debt[]) =>
+  serverBundle(debts)?.totals.debtPaymentPerMonth ??
   debts.reduce((t, d) => t + d.monthlyPayment, 0);
 
 /** "Klaar in": first payment month + remaining term. */
@@ -373,6 +435,8 @@ export interface NetWorthDerived {
 
 /** Vermogen: bezittingen − schulden, with auto lines from portfolio and mortgage. */
 export function netWorthDerived(s: FinancialState): NetWorthDerived {
+  const sb = serverBundle(s);
+  if (sb) return sb.netWorth;
   const pf = portfolioDerived(s);
   let cryptoValue = 0, p2pValue = 0;
   for (const h of pf.holdings) {
@@ -406,13 +470,17 @@ export interface SavingsGoalDerived extends SavingsGoal {
   progress: number; // 0..1
 }
 
-/** Sparen: progress and months-to-go per goal. Emergency fund target = 6 × fixed costs. */
-export function savingsGoalsDerived(s: FinancialState): {
+export interface SavingsGoalsData {
   goals: SavingsGoalDerived[];
   availablePerMonth: number;
   plannedPerMonth: number;
   freePerMonth: number;
-} {
+}
+
+/** Sparen: progress and months-to-go per goal. Emergency fund target = 6 × fixed costs. */
+export function savingsGoalsDerived(s: FinancialState): SavingsGoalsData {
+  const sb = serverBundle(s);
+  if (sb) return sb.savingsGoals;
   const availablePerMonth = savingsRoomPerMonth(s);
   const sixMonthsFixed = 6 * totalFixedExpensesPerMonth(s);
   const goals = s.savingsGoals.map((g) => {
@@ -478,6 +546,20 @@ export interface Box3Result {
  * studieschuld en overige leningen zijn aftrekbaar boven de drempel.
  */
 export function box3Estimate(s: FinancialState, p: Box3Params): Box3Result {
+  // De server rekent beide 2026-varianten (alleen/partners) voor; alleen bij
+  // afwijkende parameters (toekomstige jaren, eigen tarieven) rekenen we lokaal.
+  const sb = serverBundle(s);
+  if (
+    sb &&
+    p.exemptionPerPerson === BOX3_2026.exemptionPerPerson &&
+    p.rateSavings === BOX3_2026.rateSavings &&
+    p.rateInvestments === BOX3_2026.rateInvestments &&
+    p.rateDebts === BOX3_2026.rateDebts &&
+    p.debtThresholdPerPerson === BOX3_2026.debtThresholdPerPerson &&
+    p.taxRate === BOX3_2026.taxRate
+  ) {
+    return p.partners ? sb.box3.partners : sb.box3.single;
+  }
   const pf = portfolioDerived(s);
   const m = s.netWorth.manualAssets;
   const savings = (m.checkingAccounts ?? 0) + (m.savingsAccounts ?? 0);
@@ -526,8 +608,35 @@ export function repayVsInvest(m: MortgageInputs, extraPerMonth: number, returnPe
 
 // ---------------------------------------------------------------- dashboard rollup
 
+export interface DashboardData {
+  incomePerMonth: number;
+  fixedPerMonth: number;
+  variablePerMonth: number;
+  totalExpensesPerMonth: number;
+  investingPerMonth: number;
+  savingsRoomPerMonth: number;
+  savingsRate: number;
+  setAsidePerYear: number;
+  portfolioValue: number;
+  netWorth: number;
+  investableNetWorth: number;
+  liquidSavings: number;
+  forecastValue: number;
+  forecastYears: number;
+  expectedReturnPerYear: number;
+  emergencyFundProgress: number;
+  homeValue: number;
+  mortgageRemaining: number;
+  homeEquity: number;
+  loanToValue: number;
+  otherDebt: number;
+  netHousingCostPerMonth: number;
+}
+
 /** Everything the dashboard shows, in one derived object. */
-export function dashboard(s: FinancialState) {
+export function dashboard(s: FinancialState): DashboardData {
+  const sb = serverBundle(s);
+  if (sb) return sb.dashboard;
   const pf = portfolioDerived(s);
   const nw = netWorthDerived(s);
   const mg = mortgageSummary(s.mortgage);
@@ -598,6 +707,8 @@ export interface FinancialHealth {
  * woonquote ≤30% (>40% risicovol), vaste lasten ≤50% van netto inkomen.
  */
 export function financialHealth(s: FinancialState): FinancialHealth {
+  const sb = serverBundle(s);
+  if (sb) return sb.health;
   const d = dashboard(s);
   const income = d.incomePerMonth || 1;
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));

@@ -7,12 +7,24 @@
  */
 
 import type { FinancialState, StateEnvelope } from "../domain/types";
+import type { DerivedBundle } from "../domain/engine";
+import { setServerLogicEnabled } from "../domain/engine";
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 /** Is er een backend geconfigureerd? Zo niet, dan is localStorage de bron van waarheid. */
 export const HAS_BACKEND = BASE.length > 0;
+
+/**
+ * Feature-flag: domeinlogica op de server. Staat aan zodra er een backend
+ * geconfigureerd is; met VITE_BACKEND_LOGIC=off forceer je lokale berekeningen
+ * (bijv. om de VPS te ontzien of een regressie te omzeilen). Zonder backend
+ * (de huidige situatie tot de VPS er is) verandert er helemaal niets: de app
+ * rekent en bewaart lokaal, precies zoals nu.
+ */
+export const USE_BACKEND_LOGIC = HAS_BACKEND && import.meta.env.VITE_BACKEND_LOGIC !== "off";
+setServerLogicEnabled(USE_BACKEND_LOGIC);
 
 // Complete mock data extracted from Financieel_Overzicht_2.0.xlsx
 export const MOCK_STATE: FinancialState = {
@@ -214,4 +226,22 @@ export async function saveState(state: FinancialState, baseRevision: number): Pr
     console.error("❌ Failed to save to API:", e instanceof Error ? e.message : e);
     throw new LocalStorageFallbackError("Backend onbereikbaar; wijzigingen opgeslagen lokaal");
   }
+}
+
+/**
+ * POST /api/derive — laat de server alle afgeleide cijfers uitrekenen voor
+ * dit statusdocument. Stateless: het document gaat in de body mee, dus dit
+ * werkt ook zolang localStorage nog de bron van waarheid is. De aanroeper
+ * (SyncContext) valt bij elke fout stil terug op lokale berekeningen.
+ */
+export async function deriveState(state: FinancialState, signal?: AbortSignal): Promise<DerivedBundle> {
+  if (!BASE) throw new LocalStorageFallbackError("Geen backend geconfigureerd");
+  const res = await fetch(`${BASE}/api/derive`, {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify(state),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, `Berekenen op server mislukt (${res.status})`);
+  return (await res.json()) as DerivedBundle;
 }

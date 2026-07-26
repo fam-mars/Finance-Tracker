@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FinancieelOverzicht.Api.Domain;
 using FinancieelOverzicht.Api.Models;
 using FinancieelOverzicht.Api.Services;
 
@@ -25,7 +26,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithOrigins(allowedOrigins)
     .SetIsOriginAllowedToAllowWildcardSubdomains()
     .AllowAnyHeader()
-    .WithMethods("GET", "PUT", "OPTIONS")
+    .WithMethods("GET", "PUT", "POST", "OPTIONS")
     .WithExposedHeaders("ETag")));
 
 var app = builder.Build();
@@ -96,7 +97,7 @@ app.MapPut("/api/state", async (HttpContext ctx, IStateStore store, Cancellation
     if (next is null)
         return Results.BadRequest(new { error = "empty_body" });
 
-    var problems = Validate(next);
+    var problems = Validation.Validate(next);
     if (problems.Count > 0)
         return Results.UnprocessableEntity(new { error = "validation_failed", problems });
 
@@ -117,43 +118,80 @@ app.MapPut("/api/state", async (HttpContext ctx, IStateStore store, Cancellation
     return Results.Json(saved, Json.Options);
 });
 
+// --- Domeinlogica op de server -------------------------------------------------
+// De frontend werkt lokaal door zolang deze API niet uitgerold is; zodra
+// VITE_API_BASE_URL gezet is haalt hij alle afgeleide cijfers hier vandaan.
+
+// POST /api/derive → alle afgeleide cijfers voor het meegestuurde document.
+// Bewust stateless (het document zit in de body): werkt ook wanneer de client
+// nog localStorage als bron van waarheid gebruikt.
+app.MapPost("/api/derive", async (HttpContext ctx, CancellationToken ct) =>
+{
+    FinancialState? s;
+    try
+    {
+        s = await JsonSerializer.DeserializeAsync<FinancialState>(ctx.Request.Body, Json.Options, ct);
+    }
+    catch (JsonException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_json", detail = ex.Message });
+    }
+    if (s is null) return Results.BadRequest(new { error = "empty_body" });
+    return Results.Json(Calc.Derive(s), Json.Options);
+});
+
+// POST /api/validate → dezelfde controles als bij PUT, zonder op te slaan.
+app.MapPost("/api/validate", async (HttpContext ctx, CancellationToken ct) =>
+{
+    FinancialState? s;
+    try
+    {
+        s = await JsonSerializer.DeserializeAsync<FinancialState>(ctx.Request.Body, Json.Options, ct);
+    }
+    catch (JsonException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_json", detail = ex.Message });
+    }
+    if (s is null) return Results.BadRequest(new { error = "empty_body" });
+    return Results.Json(new { problems = Validation.Validate(s) }, Json.Options);
+});
+
+// Losse rekenendpoints voor de interactieve wat-als-berekeningen.
+app.MapPost("/api/calc/forecast-scenario", (ForecastScenarioRequest r) =>
+    Results.Json(new
+    {
+        endValue = Calc.ForecastScenario(r.StartValue, r.MonthlyContribution, r.ReturnPerYear, r.Years),
+    }, Json.Options));
+
+app.MapPost("/api/calc/months-to-target", (MonthsToTargetRequest r) =>
+    Results.Json(new
+    {
+        months = Calc.MonthsToReachTarget(r.Start, r.MonthlyContribution, r.ReturnPerYear, r.Target),
+    }, Json.Options));
+
+app.MapPost("/api/calc/annuity", (AnnuityRequest r) =>
+    Results.Json(new
+    {
+        payment = Calc.AnnuityPayment(r.Principal, r.RatePerYear, r.Years),
+    }, Json.Options));
+
+app.MapPost("/api/calc/amortization", (MortgageInputs m) =>
+    Results.Json(new
+    {
+        summary = Calc.MortgageSummary(m),
+        perYear = Calc.MortgagePerYear(m),
+        schedule = Calc.AmortizationSchedule(m),
+    }, Json.Options));
+
+app.MapPost("/api/calc/repay-vs-invest", (RepayVsInvestRequest r) =>
+    Results.Json(Calc.RepayVsInvest(r.Mortgage, r.ExtraPerMonth, r.ReturnPerYear), Json.Options));
+
+app.MapPost("/api/calc/box3", (Box3Request r) =>
+    Results.Json(Calc.Box3Estimate(r.State, r.Partners), Json.Options));
+
 app.Run();
 
 // --- Helpers -------------------------------------------------------------------
-
-static List<string> Validate(FinancialState s)
-{
-    var p = new List<string>();
-    if (s.SchemaVersion != 1) p.Add($"schemaVersion must be 1, got {s.SchemaVersion}");
-
-    void Ids(IEnumerable<string> ids, string what)
-    {
-        var list = ids.ToList();
-        if (list.Any(string.IsNullOrWhiteSpace)) p.Add($"{what}: every item needs a non-empty id");
-        if (list.Distinct().Count() != list.Count) p.Add($"{what}: duplicate ids");
-    }
-
-    Ids(s.Incomes.Select(x => x.Id), "incomes");
-    Ids(s.FixedExpenses.Select(x => x.Id), "fixedExpenses");
-    Ids(s.Portfolio.Holdings.Select(x => x.Id), "portfolio.holdings");
-    Ids(s.Debts.Select(x => x.Id), "debts");
-    Ids(s.SavingsGoals.Select(x => x.Id), "savingsGoals");
-
-    if (s.Mortgage.PrincipalRemaining < 0) p.Add("mortgage.principalRemaining must be >= 0");
-    if (s.Mortgage.InterestRatePerYear is < 0 or > 1) p.Add("mortgage.interestRatePerYear must be a fraction (0.038 = 3.8%)");
-    if (s.Forecast.HorizonYears is < 0 or > 60) p.Add("forecast.horizonYears must be between 0 and 60");
-    if (s.Forecast.ExpectedReturnPerYear is < -1 or > 1) p.Add("forecast.expectedReturnPerYear must be a fraction");
-
-    foreach (var e in s.FixedExpenses.Where(e => e.PayDay is < 1 or > 31))
-        p.Add($"fixedExpenses[{e.Id}].payDay must be 1-31 or null");
-
-    var validMonths = new[] { "jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec" };
-    foreach (var v in s.MonthOverview.VariableExpenses)
-        foreach (var k in v.Actuals.Keys.Where(k => !validMonths.Contains(k)))
-            p.Add($"monthOverview.variableExpenses[{v.Id}].actuals has unknown month key '{k}'");
-
-    return p;
-}
 
 static bool CryptographicEquals(string a, string b)
 {

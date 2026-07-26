@@ -10,7 +10,10 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { FinancialState } from "../domain/types";
-import { ConflictError, HAS_BACKEND, MOCK_STATE, fetchState, saveState } from "../api/client";
+import {
+  ConflictError, HAS_BACKEND, MOCK_STATE, USE_BACKEND_LOGIC, deriveState, fetchState, saveState,
+} from "../api/client";
+import { primeDerived } from "../domain/engine";
 import { DEMO_STATE } from "../domain/demoData";
 
 const STORAGE_KEY = "finance-tracker-state";
@@ -58,6 +61,13 @@ interface SyncValue {
   dirty: boolean;
   /** Demo-modus actief: fictieve gegevens, echte opslag onaangeraakt. */
   demo: boolean;
+  /**
+   * Telt op wanneer de server (achter de feature-flag) een nieuwe bundel
+   * afgeleide cijfers heeft berekend. Zit in de contextwaarde zodat alle
+   * schermen dan opnieuw renderen en de servercijfers oppakken; zonder
+   * backend blijft dit gewoon 0.
+   */
+  derivedRev: number;
   /** Apply an immutable update to the draft. */
   update: (fn: (draft: FinancialState) => FinancialState) => void;
   /** Save the whole draft to the backend. */
@@ -78,7 +88,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<FinancialState | null>(null);
   const [dirty, setDirty] = useState(false);
   const [demo, setDemo] = useState(false);
+  const [derivedRev, setDerivedRev] = useState(0);
   const revisionRef = useRef(0);
+  const deriveSeq = useRef(0);
 
   /**
    * Bron van waarheid zonder backend: localStorage. Mockdata is alléén het
@@ -158,6 +170,33 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [state, status, demo]);
 
+  // Domeinlogica op de server (feature-flag): laat de backend alle afgeleide
+  // cijfers uitrekenen voor het actuele document en registreer de bundel in de
+  // engine-cache. Schermen tonen intussen de lokaal berekende (identieke)
+  // cijfers; is de backend onbereikbaar dan blijft dat gewoon zo — stil
+  // terugvallen, nooit blokkeren. Demo-modus blijft altijd lokaal zodat een
+  // gedeelde demolink nooit van de VPS afhangt.
+  useEffect(() => {
+    if (!USE_BACKEND_LOGIC || !state || demo) return;
+    const seq = ++deriveSeq.current;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const bundle = await deriveState(state, ctrl.signal);
+          if (seq === deriveSeq.current) {
+            primeDerived(state, bundle);
+            setDerivedRev((r) => r + 1);
+          }
+        } catch {
+          // Backend niet bereikbaar of verouderd antwoord → lokale berekeningen
+          // blijven gelden; geen melding nodig.
+        }
+      })();
+    }, 300);
+    return () => { window.clearTimeout(timer); ctrl.abort(); };
+  }, [state, demo]);
+
   const enterDemo = useCallback(() => {
     sessionStorage.setItem(DEMO_FLAG_KEY, "1");
     sessionStorage.removeItem(DEMO_DRAFT_KEY);
@@ -222,8 +261,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SyncValue>(() => ({
     status, errorMessage, state,
     revision: revisionRef.current,
-    dirty, demo, update, save, reload: load, enterDemo, exitDemo,
-  }), [status, errorMessage, state, dirty, demo, update, save, load, enterDemo, exitDemo]);
+    dirty, demo, derivedRev, update, save, reload: load, enterDemo, exitDemo,
+  }), [status, errorMessage, state, dirty, demo, derivedRev, update, save, load, enterDemo, exitDemo]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
