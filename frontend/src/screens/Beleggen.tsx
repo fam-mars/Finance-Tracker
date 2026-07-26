@@ -5,7 +5,7 @@ import {
 } from "../domain/calc";
 import { applyPortfolioRows, parseDegiroPortfolio } from "../domain/portfolioImport";
 import type { FinancialState } from "../domain/types";
-import { EditableNumber, Money, Segments } from "../components/ui";
+import { DeleteChip, EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
 
 const PLATFORMS = ["Bitvavo", "Degiro", "Trading 212", "Mintos", "Bondora", "Anders"] as const;
@@ -211,16 +211,11 @@ function Holdings({ state }: { state: FinancialState }) {
         <section className="card" key={h.id}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <h2 className="card-title">{h.platform} · {h.name}{h.ticker ? ` (${h.ticker})` : ""}</h2>
-            <button
+            <DeleteChip title={`Verwijder ${h.name}`}
               onClick={() => update((s) => ({
                 ...s,
                 portfolio: { ...s.portfolio, holdings: s.portfolio.holdings.filter((x) => x.id !== h.id) },
-              }))}
-              title={`Verwijder ${h.name}`}
-              style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}
-            >
-              ✕
-            </button>
+              }))} />
           </div>
           <div className="row">
             <span className="row-label">Aantal</span>

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { dashboard, financialHealth, formatEUR, formatPct } from "../domain/calc";
+import { dashboard, financialHealth, formatEUR, formatPct, monthsToReachTarget } from "../domain/calc";
 import { parseBackup, serializeBackup } from "../domain/backup";
 import type { FinancialState } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
@@ -40,33 +40,9 @@ function UpcomingDebits({ state }: { state: FinancialState }) {
   );
 }
 
-/** Demo-knop: laat de app zien met fictieve cijfers, zonder eigen gegevens bloot te geven. */
-function DemoButton() {
-  const { demo, enterDemo } = useSync();
-  if (demo) return null;
-  return (
-    <button
-      onClick={enterDemo}
-      title="Laat de app zien met fictieve gegevens"
-      style={{
-        margin: "0 0 var(--sp-4)",
-        padding: "0.5rem 0.9rem",
-        border: "1px solid var(--line)",
-        borderRadius: "999px",
-        background: "var(--surface)",
-        color: "var(--ink-soft)",
-        fontSize: "var(--text-sm)",
-        fontWeight: 600,
-      }}
-    >
-      🎭 Demo-modus — laat de app zien met fictieve cijfers
-    </button>
-  );
-}
-
 /** Backup & herstel — zonder backend is een JSON-bestand je vangnet en je brug tussen apparaten. */
 function DataCard({ state }: { state: FinancialState }) {
-  const { update } = useSync();
+  const { update, demo, enterDemo } = useSync();
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -99,6 +75,11 @@ function DataCard({ state }: { state: FinancialState }) {
           aria-label="Backup terugzetten"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void importBackup(f); e.target.value = ""; }} />
         <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>⬆ Backup terugzetten</button>
+        {!demo && (
+          <button className="btn btn-ghost" onClick={enterDemo} title="Laat de app zien met fictieve cijfers">
+            🎭 Demo-modus
+          </button>
+        )}
       </div>
       {msg && (
         <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", color: msg.startsWith("✓") ? "var(--positive)" : "var(--negative)" }}>{msg}</p>
@@ -111,39 +92,48 @@ function DataCard({ state }: { state: FinancialState }) {
   );
 }
 
-/** Nibud-gebaseerde gezondheidsscore met subscores en voortgangsbalkjes. */
+/** Nibud-gebaseerde gezondheidsscore; details inklapbaar zodat het dashboard compact blijft. */
 function HealthCard({ state }: { state: FinancialState }) {
+  const [open, setOpen] = useState(false);
   const h = financialHealth(state);
   const color = h.score >= 80 ? "var(--positive)" : h.score >= 60 ? "var(--action)" : h.score >= 40 ? "#f57c00" : "var(--negative)";
   const weakest = [...h.subscores].sort((a, b) => a.score - b.score)[0];
   return (
     <section className="card" aria-labelledby="health-title">
       <h2 className="card-title" id="health-title">Financiële gezondheid</h2>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", marginBottom: "var(--sp-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)" }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", fontWeight: 700, lineHeight: 1, color }}>
           {h.score}
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600 }}>{h.label}</div>
           <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>score 0–100 · Nibud-richtlijnen</div>
         </div>
+        <button className="btn btn-ghost" style={{ minHeight: 0, padding: "6px 8px", fontSize: "var(--text-sm)" }}
+          onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? "Verberg ▴" : "Details ▾"}
+        </button>
       </div>
-      {h.subscores.map((s) => (
-        <div key={s.key} style={{ padding: "var(--sp-1) 0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-sm)" }}>
-            <span>{s.label}</span>
-            <span className="money" style={{ color: s.score >= 60 ? "var(--positive)" : s.score >= 30 ? "#f57c00" : "var(--negative)" }}>{s.score}</span>
-          </div>
-          <div className="progress" style={{ height: 5, marginTop: 3 }}>
-            <div className="progress-fill" style={{ width: `${s.score}%`, background: s.score >= 60 ? "var(--action)" : s.score >= 30 ? "#f0b429" : "var(--negative)" }} />
-          </div>
-          <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-soft)", marginTop: 2 }}>{s.detail}</div>
-        </div>
-      ))}
-      {weakest && weakest.score < 60 && (
-        <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", fontWeight: 600 }}>
-          👉 Grootste winst: <strong>{weakest.label.toLowerCase()}</strong> — zie ⚡ Tips voor concrete stappen.
+      {!open && weakest && weakest.score < 60 && (
+        <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)" }}>
+          👉 Grootste winst: <strong>{weakest.label.toLowerCase()}</strong> ({weakest.score}) — zie ⚡ Tips.
         </p>
+      )}
+      {open && (
+        <div style={{ marginTop: "var(--sp-2)" }}>
+          {h.subscores.map((s) => (
+            <div key={s.key} style={{ padding: "var(--sp-1) 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-sm)" }}>
+                <span>{s.label}</span>
+                <span className="money" style={{ color: s.score >= 60 ? "var(--positive)" : s.score >= 30 ? "#f57c00" : "var(--negative)" }}>{s.score}</span>
+              </div>
+              <div className="progress" style={{ height: 5, marginTop: 3 }}>
+                <div className="progress-fill" style={{ width: `${s.score}%`, background: s.score >= 60 ? "var(--action)" : s.score >= 30 ? "#f0b429" : "var(--negative)" }} />
+              </div>
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-soft)", marginTop: 2 }}>{s.detail}</div>
+            </div>
+          ))}
+        </div>
       )}
     </section>
   );
@@ -156,8 +146,6 @@ export function Dashboard({ state }: { state: FinancialState }) {
     <main className="screen">
       <h1 className="screen-title">Financieel overzicht</h1>
       <p className="screen-sub">Huishoudfinanciën — alles rekent automatisch.</p>
-
-      <DemoButton />
 
       {/* Signature: where does this month's income go? */}
       <section className="card" aria-labelledby="flow-title">
@@ -219,9 +207,23 @@ export function Dashboard({ state }: { state: FinancialState }) {
           </div>
           <div className="stat-note">doel: 6× maandlasten</div>
         </div>
+        {(() => {
+          const requiredAssets = d.totalExpensesPerMonth * 12 * 25;
+          const months = monthsToReachTarget(
+            d.investableNetWorth, d.investingPerMonth + d.savingsRoomPerMonth,
+            d.expectedReturnPerYear, requiredAssets);
+          const progress = requiredAssets > 0 ? Math.max(Math.min(d.investableNetWorth / requiredAssets, 1), 0) : 0;
+          return (
+            <div className="stat">
+              <div className="stat-label">FIRE</div>
+              <div className="stat-value">{months != null ? `${Math.ceil(months / 12)} jaar` : "—"}</div>
+              <div className="stat-note">{formatPct(progress)} van je FIRE-getal · zie 🎯</div>
+            </div>
+          );
+        })()}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-3)", marginTop: "var(--sp-4)" }}>
+      <div className="chart-grid">
         <IncomeExpenseComparison state={state} />
         <CategoryBreakdown state={state} />
       </div>

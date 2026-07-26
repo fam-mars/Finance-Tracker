@@ -67,6 +67,27 @@
   }
 }
 
+/* Dashboardgrafieken: gestapeld op smalle schermen, naast elkaar vanaf 480px. */
+.chart-grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); margin-top: var(--sp-4); }
+@media (min-width: 480px) { .chart-grid { grid-template-columns: 1fr 1fr; } }
+
+/* Gedeelde verwijder-chip: consistent én een fatsoenlijk touch-target. */
+.chip-danger {
+  border: none; background: #ffebee; color: #c62828;
+  border-radius: 6px; padding: 6px 10px; min-height: 32px;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { .chip-danger { background: #3a2426; color: #ff8a80; } }
+
+/* Privacymodus: bedragen vervagen (voor gebruik in het openbaar). */
+.privacy .money, .privacy .stat-value, .privacy .field-number { filter: blur(6px); }
+.privacy-toggle {
+  position: fixed; top: calc(env(safe-area-inset-top) + 10px); right: 10px; z-index: 30;
+  width: 40px; height: 40px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface);
+  font-size: 1.05rem; box-shadow: var(--shadow-card);
+}
+
 /* Printvriendelijk (jaarrapport → PDF): geen navigatie of knoppen, witte achtergrond. */
 @media print {
   .tabbar, .savebar, button, input[type="file"] { display: none !important; }

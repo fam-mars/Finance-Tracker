@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SyncProvider, useSync } from "./state/SyncContext";
 import { SaveBar, TabBar, type TabId } from "./components/ui";
 import { AuthScreen } from "./components/auth";
@@ -15,11 +15,20 @@ import { CheckIn, CheckinReminder } from "./screens/CheckIn";
 /** Geopend via een gedeelde ?demo=1-link: pin overslaan, maar exit naar echte data verbergen. */
 const DEMO_LINK = new URLSearchParams(window.location.search).has("demo");
 
+const PRIVACY_KEY = "finance-tracker-privacy";
+
 function Shell() {
   const { status, errorMessage, state, reload, demo, exitDemo } = useSync();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [privacy, setPrivacy] = useState(() => localStorage.getItem(PRIVACY_KEY) === "1");
+
+  // Privacymodus: bedragen vervagen app-breed via een class op <html>.
+  useEffect(() => {
+    document.documentElement.classList.toggle("privacy", privacy);
+    try { localStorage.setItem(PRIVACY_KEY, privacy ? "1" : "0"); } catch { /* best effort */ }
+  }, [privacy]);
 
   if (status === "loading" && !state) {
     return <main className="screen"><p style={{ color: "var(--ink-soft)" }}>Laden…</p></main>;
@@ -43,6 +52,14 @@ function Shell() {
 
   return (
     <>
+      <button
+        className="privacy-toggle"
+        onClick={() => setPrivacy(!privacy)}
+        title={privacy ? "Bedragen tonen" : "Bedragen verbergen"}
+        aria-label={privacy ? "Bedragen tonen" : "Bedragen verbergen"}
+      >
+        {privacy ? "🙈" : "👁"}
+      </button>
       {demo && (
         <div className="screen" style={{ paddingBottom: 0, paddingTop: "var(--sp-3)" }}>
           <div className="banner" style={{

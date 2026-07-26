@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { formatEUR, formatPct } from "../domain/calc";
+import { HAS_BACKEND } from "../api/client";
 import { useSync } from "../state/SyncContext";
+
+/** Gedeelde verwijder-knop: consistent uiterlijk en touch-target overal. */
+export function DeleteChip({ onClick, title }: { onClick: () => void; title: string }) {
+  return <button className="chip-danger" onClick={onClick} title={title} aria-label={title}>✕</button>;
+}
 
 /** Money value with tabular numerals; optional +/- coloring. */
 export function Money({ value, cents = false, signed = false }: {
@@ -126,13 +132,14 @@ export function SaveBar() {
         <span style={{ fontSize: "var(--text-sm)" }}>
           {status === "saving" ? "Opslaan…"
             : status === "conflict" ? "Conflict — herlaad eerst"
-            : "Niet-opgeslagen wijzigingen"}
+            : HAS_BACKEND ? "Niet-opgeslagen wijzigingen"
+            : "✓ Automatisch lokaal opgeslagen"}
         </span>
         {status === "conflict" ? (
           <button className="btn btn-primary" onClick={() => void reload()}>Herladen</button>
         ) : (
           <button className="btn btn-primary" disabled={status === "saving"} onClick={() => void save()}>
-            Opslaan
+            {HAS_BACKEND ? "Opslaan" : "OK"}
           </button>
         )}
       </div>

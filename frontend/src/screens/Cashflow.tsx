@@ -5,7 +5,7 @@ import {
 } from "../domain/calc";
 import type { FinancialState, MonthKey } from "../domain/types";
 import { MONTH_KEYS } from "../domain/types";
-import { EditableNumber, Money, Segments } from "../components/ui";
+import { DeleteChip, EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
 import { ImportSection } from "./ImportBank";
 
@@ -64,11 +64,8 @@ function Incomes({ state }: { state: FinancialState }) {
                 incomes: s.incomes.map((x) => x.id === inc.id ? { ...x, amountPerMonth: v ?? 0 } : x),
               }))}
             />
-            <button onClick={() => update((s) => ({ ...s, incomes: s.incomes.filter((x) => x.id !== inc.id) }))}
-              title={`Verwijder ${inc.source}`}
-              style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "0.35rem 0.55rem", fontSize: "0.8rem", fontWeight: 600 }}>
-              ✕
-            </button>
+            <DeleteChip title={`Verwijder ${inc.source}`}
+              onClick={() => update((s) => ({ ...s, incomes: s.incomes.filter((x) => x.id !== inc.id) }))} />
           </span>
         </div>
       ))}
@@ -90,6 +87,9 @@ function Incomes({ state }: { state: FinancialState }) {
 function FixedExpenses({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const byCat = fixedExpensesByCategory(state);
+  const [sortBy, setSortBy] = useState<"dag" | "bedrag">("dag");
+  const sortedExpenses = [...state.fixedExpenses].sort((a, b) =>
+    sortBy === "bedrag" ? b.amountPerMonth - a.amountPerMonth : (a.payDay ?? 32) - (b.payDay ?? 32));
   return (
     <>
       <section className="card">
@@ -112,8 +112,23 @@ function FixedExpenses({ state }: { state: FinancialState }) {
       <BetaalKalender state={state} />
 
       <section className="card">
-        <h2 className="card-title">Alle vaste lasten</h2>
-        {state.fixedExpenses.map((e) => (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--sp-2)" }}>
+          <h2 className="card-title">Alle vaste lasten</h2>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["dag", "bedrag"] as const).map((k) => (
+              <button key={k} onClick={() => setSortBy(k)} aria-pressed={sortBy === k}
+                style={{
+                  border: "1px solid var(--line)", borderRadius: 999, padding: "2px 10px",
+                  fontSize: "var(--text-xs)", fontWeight: 600,
+                  background: sortBy === k ? "var(--action)" : "var(--surface)",
+                  color: sortBy === k ? "var(--action-ink)" : "var(--ink-soft)",
+                }}>
+                {k}
+              </button>
+            ))}
+          </div>
+        </div>
+        {sortedExpenses.map((e) => (
           <div className="row" key={e.id}>
             <span className="row-label">
               {e.description}
@@ -131,11 +146,8 @@ function FixedExpenses({ state }: { state: FinancialState }) {
                     x.id === e.id ? { ...x, amountPerMonth: v ?? 0 } : x),
                 }))}
               />
-              <button onClick={() => update((s) => ({ ...s, fixedExpenses: s.fixedExpenses.filter((x) => x.id !== e.id) }))}
-                title={`Verwijder ${e.description}`}
-                style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "0.35rem 0.55rem", fontSize: "0.8rem", fontWeight: 600 }}>
-                ✕
-              </button>
+              <DeleteChip title={`Verwijder ${e.description}`}
+                onClick={() => update((s) => ({ ...s, fixedExpenses: s.fixedExpenses.filter((x) => x.id !== e.id) }))} />
             </span>
           </div>
         ))}
@@ -376,22 +388,7 @@ function MonthOverview({ state }: { state: FinancialState }) {
                     />
                   </div>
                 </div>
-                <button
-                  onClick={() => deleteVariableExpense(cat.id)}
-                  style={{
-                    padding: "0.4rem 0.6rem",
-                    backgroundColor: "#ffebee",
-                    color: "#c62828",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                  }}
-                  title="Verwijder"
-                >
-                  ✕
-                </button>
+                <DeleteChip title={`Verwijder ${cat.category}`} onClick={() => deleteVariableExpense(cat.id)} />
               </div>
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginTop: 4 }}>
                 {usage != null ? (

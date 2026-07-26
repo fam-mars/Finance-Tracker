@@ -3,7 +3,7 @@ import {
   BOX3_2026, box3Estimate, formatEUR, formatPct, netWorthDerived, savingsGoalsDerived,
 } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
-import { EditableNumber, Money, Segments } from "../components/ui";
+import { DeleteChip, EditableNumber, Money, Segments } from "../components/ui";
 import { PieChart } from "../components/charts";
 import { useSync } from "../state/SyncContext";
 
@@ -252,11 +252,8 @@ function Goals({ state }: { state: FinancialState }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <h2 className="card-title">{goal.name}</h2>
             {!goal.isEmergencyFund && (
-              <button onClick={() => update((s) => ({ ...s, savingsGoals: s.savingsGoals.filter((x) => x.id !== goal.id) }))}
-                title={`Verwijder ${goal.name}`}
-                style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 4, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}>
-                ✕
-              </button>
+              <DeleteChip title={`Verwijder ${goal.name}`}
+                onClick={() => update((s) => ({ ...s, savingsGoals: s.savingsGoals.filter((x) => x.id !== goal.id) }))} />
             )}
           </div>
           <div className="progress" role="progressbar"
