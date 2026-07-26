@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { dashboard, financialHealth, formatEUR, formatPct, monthsToReachTarget } from "../domain/calc";
 import { parseBackup, serializeBackup } from "../domain/backup";
 import type { FinancialState } from "../domain/types";
+import { MONTH_KEYS } from "../domain/types";
 import { Geldstroom, Money, Pct } from "../components/ui";
 import { IncomeExpenseComparison, CategoryBreakdown, DebtSummary } from "../components/charts";
 import { useSync } from "../state/SyncContext";
@@ -36,6 +37,66 @@ function UpcomingDebits({ state }: { state: FinancialState }) {
         <strong className="row-label">Totaal</strong>
         <strong><Money value={total} cents /></strong>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Uitgaven-tempo: hoeveel variabel budget is er deze maand nog, en hoeveel is
+ * dat per dag tot het einde van de maand? Puur presentatie-rekenwerk op de
+ * ingevulde budgetten en actuals van de lopende maand.
+ */
+function BudgetPace({ state }: { state: FinancialState }) {
+  const now = new Date();
+  const monthKey = MONTH_KEYS[now.getMonth()];
+  const cats = state.monthOverview.variableExpenses.filter((c) => (c.budgetPerMonth ?? 0) > 0);
+  const totalBudget = cats.reduce((t, c) => t + (c.budgetPerMonth ?? 0), 0);
+  if (totalBudget <= 0) return null;
+  const spent = cats.reduce((t, c) => t + (c.actuals[monthKey] ?? 0), 0);
+  const remaining = totalBudget - spent;
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysLeft = daysInMonth - now.getDate() + 1; // vandaag telt mee
+  const perDay = remaining / daysLeft;
+  const monthProgress = now.getDate() / daysInMonth;
+  const budgetProgress = Math.min(spent / totalBudget, 1);
+  const ahead = budgetProgress > monthProgress + 0.05;
+
+  return (
+    <section className="card">
+      <h2 className="card-title">Uitgaven-tempo · {monthKey}</h2>
+      <div className="row">
+        <span className="row-label">Nog te besteden
+          <span className="row-sub">{formatEUR(spent)} van {formatEUR(totalBudget)} budget gebruikt</span>
+        </span>
+        <span className={`money ${remaining < 0 ? "money--neg" : ""}`}>
+          <Money value={remaining} cents />
+        </span>
+      </div>
+      {remaining > 0 ? (
+        <div className="row">
+          <span className="row-label">Per dag t/m einde maand
+            <span className="row-sub">{daysLeft} {daysLeft === 1 ? "dag" : "dagen"} te gaan</span>
+          </span>
+          <Money value={perDay} cents />
+        </div>
+      ) : (
+        <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)", color: "var(--negative)", fontWeight: 600 }}>
+          Budget is op — elke euro erbij gaat ten koste van je spaarruimte.
+        </p>
+      )}
+      <div className="progress" style={{ marginTop: "var(--sp-2)", height: 6 }}
+        role="progressbar" aria-valuenow={Math.round(budgetProgress * 100)} aria-valuemin={0} aria-valuemax={100}
+        aria-label="Budgetgebruik deze maand">
+        <div className="progress-fill" style={{
+          width: `${budgetProgress * 100}%`,
+          background: remaining < 0 ? "var(--negative)" : ahead ? "#f0b429" : "var(--action)",
+        }} />
+      </div>
+      <p style={{ margin: "6px 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        {Math.round(budgetProgress * 100)}% van budget gebruikt na {Math.round(monthProgress * 100)}% van de maand
+        {ahead ? " — iets sneller dan gepland" : " — mooi op schema"}
+      </p>
     </section>
   );
 }
@@ -163,6 +224,8 @@ export function Dashboard({ state }: { state: FinancialState }) {
           <Money value={d.setAsidePerYear} /> per jaar opzij.
         </p>
       </section>
+
+      <BudgetPace state={state} />
 
       <UpcomingDebits state={state} />
 

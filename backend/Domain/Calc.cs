@@ -469,6 +469,87 @@ public static class Calc
         return new FinancialHealthDto(score, label, subscores);
     }
 
+    // ---------------------------------------------------------------- schuldenplanner
+
+    /// <summary>
+    /// Simuleer het aflossen van alle schulden (excl. hypotheek) met rollover:
+    /// vrijgekomen maandbedragen plus extraPerMonth gaan naar de doelschuld.
+    /// strategy: "sneeuwbal" (kleinste saldo eerst) of "lawine" (hoogste rente eerst).
+    /// Spiegel van debtStrategy in calc.ts — identieke bewerkingsvolgorde.
+    /// </summary>
+    public static DebtStrategyResultDto DebtStrategy(
+        IEnumerable<Debt> debts, double extraPerMonth, string strategy)
+    {
+        var sim = debts
+            .Where(d => !d.LinkedToMortgage && d.PrincipalRemaining > 0)
+            .Select(d => new DebtSim
+            {
+                Id = d.Id,
+                Description = d.Description,
+                Balance = d.PrincipalRemaining,
+                RateMonth = d.InterestRatePerYear / 12,
+                Payment = d.MonthlyPayment,
+            })
+            .ToList();
+        if (sim.Count == 0) return new DebtStrategyResultDto([], 0, 0);
+
+        int PickTarget()
+        {
+            var best = -1;
+            for (var i = 0; i < sim.Count; i++)
+            {
+                if (sim[i].Balance <= 0.005) continue;
+                if (best < 0) { best = i; continue; }
+                var better = strategy == "sneeuwbal"
+                    ? sim[i].Balance < sim[best].Balance
+                    : sim[i].RateMonth > sim[best].RateMonth;
+                if (better) best = i;
+            }
+            return best;
+        }
+
+        const int maxMonths = 50 * 12;
+        var month = 0;
+        while (month < maxMonths)
+        {
+            var targetIdx = PickTarget();
+            if (targetIdx < 0) break;
+            month++;
+            var freed = sim.Where(d => d.Balance <= 0.005).Sum(d => d.Payment);
+            for (var i = 0; i < sim.Count; i++)
+            {
+                var d = sim[i];
+                if (d.Balance <= 0.005) continue;
+                var interest = d.Balance * d.RateMonth;
+                d.InterestPaid += interest;
+                var pay = d.Payment + (i == targetIdx ? extraPerMonth + freed : 0);
+                d.Balance = Math.Max(d.Balance + interest - pay, 0);
+                if (d.Balance <= 0.005)
+                {
+                    d.Balance = 0;
+                    d.PayoffMonth = month;
+                }
+            }
+        }
+
+        var allPaid = sim.All(d => d.Balance <= 0.005);
+        return new DebtStrategyResultDto(
+            sim.Select(d => new DebtPlanRowDto(d.Id, d.Description, d.PayoffMonth, d.InterestPaid)).ToList(),
+            allPaid ? month : null,
+            sim.Sum(d => d.InterestPaid));
+    }
+
+    private sealed class DebtSim
+    {
+        public string Id = "";
+        public string Description = "";
+        public double Balance;
+        public double RateMonth;
+        public double Payment;
+        public double InterestPaid;
+        public int PayoffMonth;
+    }
+
     // ---------------------------------------------------------------- alles-in-één bundel
 
     /// <summary>

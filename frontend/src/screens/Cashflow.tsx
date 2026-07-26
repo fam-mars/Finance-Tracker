@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  fixedExpensesByCategory, formatPct, monthColumns,
+  fixedExpensesByCategory, formatEUR, formatPct, monthColumns,
   totalFixedExpensesPerMonth, totalIncomePerMonth,
 } from "../domain/calc";
 import type { FinancialState, MonthKey } from "../domain/types";
@@ -154,7 +154,68 @@ function FixedExpenses({ state }: { state: FinancialState }) {
       </section>
 
       <AddFixedExpense />
+
+      <IndexatieHelper state={state} />
     </>
+  );
+}
+
+/**
+ * Jaarlijkse indexatie: huur, verzekeringen en abonnementen stijgen elk jaar.
+ * Reken in één keer door wat +X% met je vaste lasten doet en pas het toe.
+ */
+function IndexatieHelper({ state }: { state: FinancialState }) {
+  const { update } = useSync();
+  const [pct, setPct] = useState(3);
+  const [confirming, setConfirming] = useState(false);
+  const total = totalFixedExpensesPerMonth(state);
+  const factor = 1 + pct / 100;
+  const newTotal = state.fixedExpenses.reduce(
+    (t, e) => t + Math.round(e.amountPerMonth * factor * 100) / 100, 0);
+
+  const apply = () => {
+    update((s) => ({
+      ...s,
+      fixedExpenses: s.fixedExpenses.map((e) => ({
+        ...e, amountPerMonth: Math.round(e.amountPerMonth * factor * 100) / 100,
+      })),
+    }));
+    setConfirming(false);
+  };
+
+  return (
+    <section className="card" style={{ marginTop: "var(--sp-4)" }}>
+      <h2 className="card-title">Indexatie-helper</h2>
+      <div className="row">
+        <span className="row-label">Verhoog alle vaste lasten met (%)
+          <span className="row-sub">jaarlijkse indexatie van huur, premies en abonnementen</span>
+        </span>
+        <EditableNumber value={pct} ariaLabel="Indexatiepercentage"
+          onCommit={(v) => { setPct(v ?? 0); setConfirming(false); }} />
+      </div>
+      <div className="row">
+        <span className="row-label">Nieuw totaal p/m</span>
+        <span>
+          <Money value={newTotal} cents />{" "}
+          <span className={newTotal >= total ? "money money--neg" : "money money--pos"} style={{ fontSize: "var(--text-xs)" }}>
+            {newTotal >= total ? "+" : ""}{(newTotal - total).toLocaleString("nl-NL", { style: "currency", currency: "EUR" })}
+          </span>
+        </span>
+      </div>
+      {!confirming ? (
+        <button className="btn btn-ghost" onClick={() => setConfirming(true)} disabled={pct === 0}>
+          Pas toe op alle {state.fixedExpenses.length} regels…
+        </button>
+      ) : (
+        <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-2)" }}>
+          <button className="btn btn-primary" onClick={apply}>Ja, verhoog alles met {pct}%</button>
+          <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Annuleer</button>
+        </div>
+      )}
+      <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Ook negatieve regels (zoals teruggaven) schalen mee. Individuele bedragen pas je daarna gewoon per regel aan.
+      </p>
+    </section>
   );
 }
 
@@ -318,6 +379,126 @@ function BetaalKalender({ state }: { state: FinancialState }) {
   );
 }
 
+/** Sparkline + verschil per categorie: zie in één oogopslag waar het heen gaat. */
+function TrendsCard({ state, month }: { state: FinancialState; month: MonthKey }) {
+  const idx = MONTH_KEYS.indexOf(month);
+  const prevKey = idx > 0 ? MONTH_KEYS[idx - 1] : null;
+
+  const rows = state.monthOverview.variableExpenses
+    .map((cat) => {
+      const filled = MONTH_KEYS.map((k) => cat.actuals[k]).filter((v): v is number => v != null);
+      if (filled.length < 2) return null;
+      const lastIdx = MONTH_KEYS.reduce((t, k, i) => (cat.actuals[k] != null ? i : t), 0);
+      const series = MONTH_KEYS.slice(0, lastIdx + 1).map((k) => cat.actuals[k] ?? 0);
+      const avg = filled.reduce((t, v) => t + v, 0) / filled.length;
+      const cur = cat.actuals[month];
+      const prev = prevKey ? cat.actuals[prevKey] : null;
+      const delta = cur != null && prev != null ? cur - prev : null;
+      return { id: cat.id, category: cat.category, series, avg, delta };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  if (rows.length === 0) return null;
+
+  const spark = (series: number[]) => {
+    const w = 72, h = 18;
+    const max = Math.max(...series, 1);
+    const step = series.length > 1 ? w / (series.length - 1) : 0;
+    const pts = series.map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - (v / max) * (h - 4)).toFixed(1)}`).join(" ");
+    return (
+      <svg width={w} height={h} aria-hidden style={{ display: "block" }}>
+        <polyline points={pts} fill="none" stroke="var(--action)" strokeWidth="1.5" />
+      </svg>
+    );
+  };
+
+  return (
+    <section className="card">
+      <h2 className="card-title">Trends per categorie</h2>
+      {rows.map((r) => (
+        <div className="row" key={r.id}>
+          <span className="row-label">{r.category}
+            <span className="row-sub">gemiddeld {formatEUR(r.avg)} p/m</span>
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            {spark(r.series)}
+            {r.delta != null && Math.abs(r.delta) >= 0.5 && (
+              <span style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: r.delta > 0 ? "var(--negative)" : "var(--positive)" }}>
+                {r.delta > 0 ? "▲" : "▼"} {formatEUR(Math.abs(r.delta))} vs vorige maand
+              </span>
+            )}
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** Automatisch maandrapport: wat viel op in deze maand? */
+function MaandRapport({ state, month, cols }: {
+  state: FinancialState; month: MonthKey; cols: ReturnType<typeof monthColumns>;
+}) {
+  const idx = MONTH_KEYS.indexOf(month);
+  const col = cols[idx];
+  const hasData = state.monthOverview.variableExpenses.some((c) => c.actuals[month] != null);
+  if (!hasData) return null;
+
+  const totalBudget = state.monthOverview.variableExpenses.reduce(
+    (t, c) => t + (c.budgetPerMonth ?? 0), 0);
+  const deltas = state.monthOverview.variableExpenses
+    .filter((c) => c.budgetPerMonth != null && c.actuals[month] != null)
+    .map((c) => ({ category: c.category, delta: (c.actuals[month] ?? 0) - (c.budgetPerMonth ?? 0) }));
+  const worst = deltas.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta)[0];
+  const best = deltas.filter((d) => d.delta < 0).sort((a, b) => a.delta - b.delta)[0];
+
+  const prevIdx = idx - 1;
+  const prevHasData = prevIdx >= 0 &&
+    state.monthOverview.variableExpenses.some((c) => c.actuals[MONTH_KEYS[prevIdx]] != null);
+  const prevCol = prevHasData ? cols[prevIdx] : null;
+
+  return (
+    <section className="card" style={{ backgroundColor: "#fff8e1", borderLeft: "4px solid var(--accent)" }}>
+      <h2 className="card-title">Maandrapport · {month}</h2>
+      <div className="row">
+        <span className="row-label">Variabel uitgegeven
+          {totalBudget > 0 && (
+            <span className="row-sub">
+              budget {formatEUR(totalBudget)} · {col.variable <= totalBudget
+                ? `${formatEUR(totalBudget - col.variable)} over`
+                : `${formatEUR(col.variable - totalBudget)} eroverheen`}
+            </span>
+          )}
+        </span>
+        <Money value={col.variable} cents />
+      </div>
+      {worst && (
+        <div className="row">
+          <span className="row-label">Grootste overschrijding</span>
+          <span className="money money--neg">{worst.category} +{formatEUR(worst.delta)}</span>
+        </div>
+      )}
+      {best && (
+        <div className="row">
+          <span className="row-label">Grootste meevaller</span>
+          <span className="money money--pos">{best.category} −{formatEUR(-best.delta)}</span>
+        </div>
+      )}
+      {prevCol && (() => {
+        const diff = col.variable - prevCol.variable;
+        return (
+          <div className="row">
+            <span className="row-label">Vs vorige maand
+              <span className="row-sub">spaarquote {formatPct(prevCol.savingsRate)} → {formatPct(col.savingsRate)}</span>
+            </span>
+            <span className={`money ${diff > 0 ? "money--neg" : diff < 0 ? "money--pos" : ""}`}>
+              {diff > 0 ? "+" : ""}{formatEUR(diff, true)}
+            </span>
+          </div>
+        );
+      })()}
+    </section>
+  );
+}
+
 function MonthOverview({ state }: { state: FinancialState }) {
   const { update } = useSync();
   const now = new Date();
@@ -456,6 +637,10 @@ function MonthOverview({ state }: { state: FinancialState }) {
           </button>
         </div>
       </section>
+
+      <TrendsCard state={state} month={month} />
+
+      <MaandRapport state={state} month={month} cols={cols} />
 
       <section className="card">
         <h2 className="card-title">Gespaard per maand</h2>

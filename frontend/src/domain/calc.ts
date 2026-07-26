@@ -750,3 +750,90 @@ export function financialHealth(s: FinancialState): FinancialHealth {
   const label = score >= 80 ? "Uitstekend" : score >= 60 ? "Goed" : score >= 40 ? "Redelijk" : "Aandacht nodig";
   return { score, label, subscores };
 }
+
+// ---------------------------------------------------------------- schuldenplanner
+
+export type DebtStrategyKind = "sneeuwbal" | "lawine";
+
+export interface DebtPlanRow {
+  id: string;
+  description: string;
+  /** 1-based maand waarin deze schuld op nul komt; 0 = niet afgelost binnen 50 jaar. */
+  payoffMonth: number;
+  interestPaid: number;
+}
+
+export interface DebtStrategyResult {
+  rows: DebtPlanRow[];
+  /** Null = niet schuldenvrij binnen 50 jaar (betalingen dekken de rente niet). */
+  monthsToDebtFree: number | null;
+  totalInterest: number;
+}
+
+/**
+ * Simuleer het aflossen van alle schulden (excl. hypotheek) met rollover:
+ * zodra een schuld is afgelost gaat het vrijgekomen maandbedrag — plus
+ * `extraPerMonth` — naar de doelschuld. Sneeuwbal = kleinste saldo eerst
+ * (motivatie), lawine = hoogste rente eerst (minste rente betalen).
+ * Vereenvoudigd model: overbetaling in de aflosmaand cascadeert niet binnen
+ * diezelfde maand door naar de volgende schuld.
+ */
+export function debtStrategy(
+  debts: Debt[], extraPerMonth: number, strategy: DebtStrategyKind,
+): DebtStrategyResult {
+  const sim = debts
+    .filter((d) => !d.linkedToMortgage && d.principalRemaining > 0)
+    .map((d) => ({
+      id: d.id,
+      description: d.description,
+      balance: d.principalRemaining,
+      rateMonth: d.interestRatePerYear / 12,
+      payment: d.monthlyPayment,
+      interestPaid: 0,
+      payoffMonth: 0,
+    }));
+  if (sim.length === 0) return { rows: [], monthsToDebtFree: 0, totalInterest: 0 };
+
+  const pickTarget = () => {
+    let best = -1;
+    for (let i = 0; i < sim.length; i++) {
+      if (sim[i].balance <= 0.005) continue;
+      if (best < 0) { best = i; continue; }
+      if (strategy === "sneeuwbal" ? sim[i].balance < sim[best].balance : sim[i].rateMonth > sim[best].rateMonth) {
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  const maxMonths = 50 * 12;
+  let month = 0;
+  while (month < maxMonths) {
+    const targetIdx = pickTarget();
+    if (targetIdx < 0) break;
+    month++;
+    // Vrijgekomen maandbedragen van eerder afgeloste schulden rollen door.
+    const freed = sim.reduce((t, d) => (d.balance <= 0.005 ? t + d.payment : t), 0);
+    for (let i = 0; i < sim.length; i++) {
+      const d = sim[i];
+      if (d.balance <= 0.005) continue;
+      const interest = d.balance * d.rateMonth;
+      d.interestPaid += interest;
+      const pay = d.payment + (i === targetIdx ? extraPerMonth + freed : 0);
+      d.balance = Math.max(d.balance + interest - pay, 0);
+      if (d.balance <= 0.005) {
+        d.balance = 0;
+        d.payoffMonth = month;
+      }
+    }
+  }
+
+  const allPaid = sim.every((d) => d.balance <= 0.005);
+  return {
+    rows: sim.map((d) => ({
+      id: d.id, description: d.description, payoffMonth: d.payoffMonth, interestPaid: d.interestPaid,
+    })),
+    monthsToDebtFree: allPaid ? month : null,
+    totalInterest: sim.reduce((t, d) => t + d.interestPaid, 0),
+  };
+}

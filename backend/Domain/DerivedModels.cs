@@ -185,6 +185,11 @@ public sealed record RepayVsInvestDto(
     double InvestEndValue,
     double InvestGrowth);
 
+public sealed record DebtPlanRowDto(string Id, string Description, int PayoffMonth, double InterestPaid);
+
+public sealed record DebtStrategyResultDto(
+    List<DebtPlanRowDto> Rows, int? MonthsToDebtFree, double TotalInterest);
+
 // ---- request-DTO's voor de losse rekenendpoints (/api/calc/*) ----------------
 
 public sealed record ForecastScenarioRequest(
@@ -199,3 +204,7 @@ public sealed record RepayVsInvestRequest(
     Models.MortgageInputs Mortgage, double ExtraPerMonth, double ReturnPerYear);
 
 public sealed record Box3Request(Models.FinancialState State, bool Partners);
+
+/// <summary>Strategy: "sneeuwbal" (kleinste saldo eerst) of "lawine" (hoogste rente eerst).</summary>
+public sealed record DebtStrategyRequest(
+    List<Models.Debt> Debts, double ExtraPerMonth, string Strategy);

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import {
-  amortizationSchedule, debtPayoffDate, formatPct, mortgagePerYear, mortgageSummary,
-  repayVsInvest, totalDebt, totalDebtExclMortgage, totalDebtPaymentPerMonth,
+  amortizationSchedule, debtPayoffDate, debtStrategy, formatEUR, formatPct,
+  mortgagePerYear, mortgageSummary, repayVsInvest, totalDebt,
+  totalDebtExclMortgage, totalDebtPaymentPerMonth,
 } from "../domain/calc";
+import type { DebtStrategyKind } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
 import { EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
@@ -247,6 +249,90 @@ function Debts({ state }: { state: FinancialState }) {
         <div className="row"><span className="row-label">Excl. hypotheek</span><Money value={totalDebtExclMortgage(state.debts)} /></div>
         <div className="row"><span className="row-label">Maandlasten schulden</span><Money value={totalDebtPaymentPerMonth(state.debts)} cents /></div>
       </section>
+
+      <DebtPlannerCard state={state} />
     </>
+  );
+}
+
+/**
+ * Aflosplanner: sneeuwbal (kleinste saldo eerst, motivatie) vs lawine
+ * (hoogste rente eerst, goedkoopst), met rollover van vrijgekomen
+ * maandbedragen en een instelbaar extra bedrag per maand.
+ */
+function DebtPlannerCard({ state }: { state: FinancialState }) {
+  const [extra, setExtra] = useState(100);
+  const [strategy, setStrategy] = useState<DebtStrategyKind>("lawine");
+  const relevant = state.debts.filter((d) => !d.linkedToMortgage && d.principalRemaining > 0);
+  if (relevant.length === 0) return null;
+
+  const sneeuwbal = debtStrategy(state.debts, extra, "sneeuwbal");
+  const lawine = debtStrategy(state.debts, extra, "lawine");
+  const baseline = debtStrategy(state.debts, 0, strategy);
+  const chosen = strategy === "sneeuwbal" ? sneeuwbal : lawine;
+  const interestDelta = sneeuwbal.totalInterest - lawine.totalInterest;
+
+  const fmtMonths = (m: number | null) =>
+    m == null ? "niet haalbaar" : m >= 24 ? `${Math.floor(m / 12)} jr ${m % 12} mnd` : `${m} mnd`;
+  const fmtDate = new Intl.DateTimeFormat("nl-NL", { month: "short", year: "numeric" });
+  const dateAfter = (months: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return fmtDate.format(d);
+  };
+
+  return (
+    <section className="card" style={{ backgroundColor: "#e8f5e9", borderLeft: "4px solid var(--positive)" }}>
+      <h2 className="card-title">Aflosplanner</h2>
+      <div className="row">
+        <span className="row-label">Extra aflossen p/m
+          <span className="row-sub">bovenop de huidige maandbedragen</span>
+        </span>
+        <EditableNumber value={extra} ariaLabel="Extra aflossen per maand"
+          onCommit={(v) => setExtra(Math.max(v ?? 0, 0))} />
+      </div>
+      <Segments
+        options={[
+          { id: "lawine" as const, label: "Lawine (rente)" },
+          { id: "sneeuwbal" as const, label: "Sneeuwbal (saldo)" },
+        ]}
+        value={strategy}
+        onChange={setStrategy}
+      />
+      <div className="row">
+        <span className="row-label">Schuldenvrij in</span>
+        <strong className="money">{fmtMonths(chosen.monthsToDebtFree)}</strong>
+      </div>
+      <div className="row">
+        <span className="row-label">Totale rente
+          <span className="row-sub">
+            {extra > 0 && baseline.monthsToDebtFree != null && chosen.monthsToDebtFree != null
+              ? `zonder extra: ${formatEUR(baseline.totalInterest)} · je bespaart ${formatEUR(Math.max(baseline.totalInterest - chosen.totalInterest, 0))}`
+              : "over de hele looptijd"}
+          </span>
+        </span>
+        <Money value={chosen.totalInterest} />
+      </div>
+      {chosen.rows.length > 1 && Math.abs(interestDelta) >= 1 && (
+        <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+          {interestDelta > 0
+            ? `❄️ Lawine is hier ${formatEUR(interestDelta)} goedkoper dan sneeuwbal.`
+            : `⛄ Sneeuwbal is hier zelfs ${formatEUR(-interestDelta)} goedkoper — kleine schuld met hoge rente eerst.`}
+        </p>
+      )}
+      <div style={{ marginTop: "var(--sp-2)" }}>
+        {[...chosen.rows].sort((a, b) => (a.payoffMonth || 9999) - (b.payoffMonth || 9999)).map((r, i) => (
+          <div className="row" key={r.id}>
+            <span className="row-label">{i + 1}. {r.description}
+              <span className="row-sub">rente betaald: {formatEUR(r.interestPaid)}</span>
+            </span>
+            <span className="money">{r.payoffMonth > 0 ? dateAfter(r.payoffMonth) : "—"}</span>
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Vrijgekomen maandbedragen rollen automatisch door naar de volgende schuld. Hypotheek telt hier niet mee.
+      </p>
+    </section>
   );
 }
