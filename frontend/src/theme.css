@@ -299,6 +299,27 @@ input, select {
   justify-content: space-between;
 }
 
+/* paginavoet: link naar de ebook-gids. Trekt zichzelf omhoog in de
+   tabbar-vrijruimte van .screen zodat er geen dubbel gat ontstaat. */
+.app-footer {
+  max-width: var(--content-max);
+  margin: calc(-1 * var(--tabbar-h)) auto 0;
+  /* extra bodemruimte zodat de zwevende gids-knop de link niet overlapt */
+  padding: 0 var(--sp-4) calc(var(--tabbar-h) + 72px);
+  text-align: center;
+}
+
+.app-footer a {
+  display: block;
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-4);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.app-footer a:hover, .app-footer a:focus-visible { color: var(--action); }
+
 /* bottom tab bar */
 .tabbar {
   position: fixed;
