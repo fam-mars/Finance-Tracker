@@ -11,7 +11,7 @@ import {
 import type { ReactNode } from "react";
 import type { FinancialState } from "../domain/types";
 import {
-  ConflictError, HAS_BACKEND, MOCK_STATE, USE_BACKEND_LOGIC, deriveState, fetchState, saveState,
+  ConflictError, EMPTY_STATE, HAS_BACKEND, USE_BACKEND_LOGIC, deriveState, fetchState, saveState,
 } from "../api/client";
 import { primeDerived } from "../domain/engine";
 import { DEMO_STATE } from "../domain/demoData";
@@ -93,9 +93,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const deriveSeq = useRef(0);
 
   /**
-   * Bron van waarheid zonder backend: localStorage. Mockdata is alléén het
-   * zaadje voor de allereerste run en mag opgeslagen gegevens nooit
-   * overschrijven. Met backend: eerst backend, bij falen localStorage.
+   * Bron van waarheid zonder backend: localStorage. De lege startstaat is
+   * alléén het zaadje voor de allereerste run en mag opgeslagen gegevens
+   * nooit overschrijven. Met backend: eerst backend, bij falen localStorage.
    */
   const load = useCallback(async () => {
     setStatus("loading");
@@ -121,7 +121,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     const local = getLocalState();
 
     if (!HAS_BACKEND) {
-      const seed = local ?? { state: MOCK_STATE, revision: 1 };
+      const seed = local ?? { state: EMPTY_STATE, revision: 1 };
       revisionRef.current = seed.revision;
       setState(seed.state);
       if (!local) saveLocalState(seed.state, seed.revision);

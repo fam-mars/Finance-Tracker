@@ -200,13 +200,40 @@ function HealthCard({ state }: { state: FinancialState }) {
   );
 }
 
+/** Verse start (geen eigen cijfers): wijs de weg naar Gids, demo of backup. */
+function EmptyWelcome() {
+  const { demo, enterDemo } = useSync();
+  if (demo) return null;
+  return (
+    <section className="card" style={{ backgroundColor: "#fff8e1", borderLeft: "4px solid var(--accent)" }}>
+      <h2 className="card-title">Welkom 👋</h2>
+      <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+        Deze app is nog leeg. Vul je eigen cijfers stap voor stap in via de{" "}
+        <strong>📋 Gids</strong> (knop rechtsonder), zet een eerder gemaakte backup terug
+        via <strong>Gegevens</strong> onderaan, of kijk eerst rond met fictieve cijfers:
+      </p>
+      <button className="btn btn-primary" style={{ marginTop: "var(--sp-3)" }} onClick={enterDemo}>
+        🎭 Bekijk de demo
+      </button>
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Alles wat je invult blijft in deze browser — er gaat niets naar een server.
+      </p>
+    </section>
+  );
+}
+
 export function Dashboard({ state }: { state: FinancialState }) {
   const d = dashboard(state);
+  const isEmpty =
+    state.incomes.length === 0 && state.fixedExpenses.length === 0 &&
+    state.portfolio.holdings.length === 0;
 
   return (
     <main className="screen">
       <h1 className="screen-title">Financieel overzicht</h1>
       <p className="screen-sub">Huishoudfinanciën — alles rekent automatisch.</p>
+
+      {isEmpty && <EmptyWelcome />}
 
       {/* Signature: where does this month's income go? */}
       <section className="card" aria-labelledby="flow-title">

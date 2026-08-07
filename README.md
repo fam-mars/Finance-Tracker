@@ -4,7 +4,7 @@ This bundle turns `Financieel_Overzicht_2_0.xlsx` into a mobile-first web app:
 
 - **Frontend**: React + Vite + TypeScript, deployed on **Vercel**. Zonder backend is localStorage de bron van waarheid (autosave bij elke wijziging); met backend syncthij via volledige GET/PUT met revisies.
 - **Backend**: **.NET 8 minimal API** on your VPS. Stores the spreadsheet's *input values* as one JSON document with revisions, atomic writes and rolling backups. Sinds de backend-refactor bevat hij óók de volledige domeinlaag (`backend/Domain/Calc.cs` + `Validation.cs`): `POST /api/derive` rekent alle afgeleide cijfers uit, `POST /api/calc/*` de losse wat-als-berekeningen.
-- **Data**: `backend/data/seed.json` — every prefilled input value extracted from the workbook. All spreadsheet *formulas* exist twice, in lockstep: pure TypeScript in `frontend/src/domain/calc.ts` en dezelfde formules in C# in `backend/Domain/Calc.cs` (pariteitsgetest: 6.612 vergelijkingen identiek).
+- **Data**: de app en `backend/data/seed.json` bevatten géén echte huishoudcijfers — een verse installatie start leeg; eigen cijfers komen binnen via de Gids of een backup-import, en de enige voorgevulde dataset is de fictieve demo (`frontend/src/domain/demoData.ts`). All spreadsheet *formulas* exist twice, in lockstep: pure TypeScript in `frontend/src/domain/calc.ts` en dezelfde formules in C# in `backend/Domain/Calc.cs` (pariteitsgetest: 6.612 vergelijkingen identiek).
 
 ## Layout
 
