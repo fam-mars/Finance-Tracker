@@ -550,6 +550,51 @@ public static class Calc
         public int PayoffMonth;
     }
 
+    /// <summary>
+    /// Per schuld: €X p/m extra aflossen vs hetzelfde bedrag beleggen over de
+    /// basislooptijd. Spiegel van debtRepayVsInvest in calc.ts.
+    /// </summary>
+    public static DebtRepayVsInvestDto DebtRepayVsInvest(Debt debt, double extraPerMonth, double returnPerYear)
+    {
+        const int maxMonths = 50 * 12;
+        var rMonth = debt.InterestRatePerYear / 12;
+
+        (int? Months, double Interest) Sim(double extra)
+        {
+            var balance = debt.PrincipalRemaining;
+            double interest = 0;
+            var m = 0;
+            while (balance > 0.005 && m < maxMonths)
+            {
+                m++;
+                var i = balance * rMonth;
+                interest += i;
+                balance = Math.Max(balance + i - (debt.MonthlyPayment + extra), 0);
+            }
+            return (balance <= 0.005 ? m : null, interest);
+        }
+
+        var baseRun = Sim(0);
+        var withExtra = Sim(extraPerMonth);
+
+        var horizon = baseRun.Months ?? maxMonths;
+        var rInvest = returnPerYear / 12;
+        double investEndValue = 0;
+        for (var i = 0; i < horizon; i++) investEndValue = investEndValue * (1 + rInvest) + extraPerMonth;
+        var invested = extraPerMonth * horizon;
+
+        return new DebtRepayVsInvestDto(
+            baseRun.Months,
+            baseRun.Interest,
+            withExtra.Months,
+            withExtra.Interest,
+            baseRun.Interest - withExtra.Interest,
+            (baseRun.Months ?? maxMonths) - (withExtra.Months ?? maxMonths),
+            invested,
+            investEndValue,
+            investEndValue - invested);
+    }
+
     // ---------------------------------------------------------------- alles-in-één bundel
 
     /// <summary>

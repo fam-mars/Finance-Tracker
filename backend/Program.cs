@@ -192,6 +192,9 @@ app.MapPost("/api/calc/box3", (Box3Request r) =>
 app.MapPost("/api/calc/debt-strategy", (DebtStrategyRequest r) =>
     Results.Json(Calc.DebtStrategy(r.Debts, r.ExtraPerMonth, r.Strategy), Json.Options));
 
+app.MapPost("/api/calc/debt-repay-vs-invest", (DebtRepayVsInvestRequest r) =>
+    Results.Json(Calc.DebtRepayVsInvest(r.Debt, r.ExtraPerMonth, r.ReturnPerYear), Json.Options));
+
 app.Run();
 
 // --- Helpers -------------------------------------------------------------------
