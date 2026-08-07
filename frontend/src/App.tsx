@@ -125,6 +125,10 @@ function Shell() {
         </button>
       )}
 
+      <footer className="app-footer">
+        <a href="/guide">📖 Event Sourcing in Platform.Ecommerce — engineer's guide</a>
+      </footer>
+
       <SaveBar />
       <TabBar active={tab} onSelect={setTab} />
     </>
