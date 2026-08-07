@@ -208,3 +208,17 @@ public sealed record Box3Request(Models.FinancialState State, bool Partners);
 /// <summary>Strategy: "sneeuwbal" (kleinste saldo eerst) of "lawine" (hoogste rente eerst).</summary>
 public sealed record DebtStrategyRequest(
     List<Models.Debt> Debts, double ExtraPerMonth, string Strategy);
+
+public sealed record DebtRepayVsInvestDto(
+    int? BaseMonths,
+    double BaseInterest,
+    int? ExtraMonths,
+    double ExtraInterest,
+    double InterestSaved,
+    int MonthsEarlier,
+    double Invested,
+    double InvestEndValue,
+    double InvestGrowth);
+
+public sealed record DebtRepayVsInvestRequest(
+    Models.Debt Debt, double ExtraPerMonth, double ReturnPerYear);

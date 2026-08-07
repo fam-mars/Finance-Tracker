@@ -837,3 +837,68 @@ export function debtStrategy(
     totalInterest: sim.reduce((t, d) => t + d.interestPaid, 0),
   };
 }
+
+// ------------------------------------------- per schuld: aflossen of beleggen
+
+export interface DebtRepayVsInvest {
+  /** Looptijd bij alleen het huidige maandbedrag; null = rente > betaling, nooit klaar. */
+  baseMonths: number | null;
+  baseInterest: number;
+  extraMonths: number | null;
+  extraInterest: number;
+  /** Gegarandeerd bespaarde rente door extra af te lossen. */
+  interestSaved: number;
+  monthsEarlier: number;
+  /** Totaal ingelegd wanneer je hetzelfde extra bedrag zou beleggen. */
+  invested: number;
+  investEndValue: number;
+  /** Verwachte groei boven inleg — niet gegarandeerd. */
+  investGrowth: number;
+}
+
+/**
+ * Zelfde euro, twee routes — voor een losse schuld (studieschuld, autolening):
+ * €X p/m extra aflossen (gegarandeerd rente besparen, eerder klaar) of €X p/m
+ * beleggen tegen het verwachte rendement, over de basislooptijd van de schuld,
+ * terwijl de schuld gewoon op het huidige maandbedrag doorloopt.
+ * Vereenvoudigd model, zoals bij de hypotheekvariant: wat er ná een vervroegde
+ * aflossing met het vrijgekomen maandbedrag gebeurt, blijft buiten beeld.
+ */
+export function debtRepayVsInvest(
+  debt: Debt, extraPerMonth: number, returnPerYear: number,
+): DebtRepayVsInvest {
+  const maxMonths = 50 * 12;
+  const rMonth = debt.interestRatePerYear / 12;
+  const sim = (extra: number) => {
+    let balance = debt.principalRemaining;
+    let interest = 0;
+    let m = 0;
+    while (balance > 0.005 && m < maxMonths) {
+      m++;
+      const i = balance * rMonth;
+      interest += i;
+      balance = Math.max(balance + i - (debt.monthlyPayment + extra), 0);
+    }
+    return { months: balance <= 0.005 ? m : null, interest };
+  };
+  const base = sim(0);
+  const withExtra = sim(extraPerMonth);
+
+  const horizon = base.months ?? maxMonths;
+  const rInvest = returnPerYear / 12;
+  let investEndValue = 0;
+  for (let i = 0; i < horizon; i++) investEndValue = investEndValue * (1 + rInvest) + extraPerMonth;
+  const invested = extraPerMonth * horizon;
+
+  return {
+    baseMonths: base.months,
+    baseInterest: base.interest,
+    extraMonths: withExtra.months,
+    extraInterest: withExtra.interest,
+    interestSaved: base.interest - withExtra.interest,
+    monthsEarlier: (base.months ?? maxMonths) - (withExtra.months ?? maxMonths),
+    invested,
+    investEndValue,
+    investGrowth: investEndValue - invested,
+  };
+}

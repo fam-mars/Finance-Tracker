@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
-  amortizationSchedule, debtPayoffDate, debtStrategy, formatEUR, formatPct,
+  amortizationSchedule, debtPayoffDate, debtRepayVsInvest, debtStrategy, formatEUR, formatPct,
   mortgagePerYear, mortgageSummary, repayVsInvest, totalDebt,
   totalDebtExclMortgage, totalDebtPaymentPerMonth,
 } from "../domain/calc";
 import type { DebtStrategyKind } from "../domain/calc";
 import type { FinancialState } from "../domain/types";
-import { EditableNumber, Money, Segments } from "../components/ui";
+import { DeleteChip, EditableNumber, Money, Segments } from "../components/ui";
 import { useSync } from "../state/SyncContext";
 
 type Section = "hypotheek" | "schema" | "schulden";
@@ -208,9 +208,15 @@ function Debts({ state }: { state: FinancialState }) {
         const payoff = debtPayoffDate(d);
         return (
           <section className="card" key={d.id}>
-            <h2 className="card-title">
-              {d.description}{d.lender ? ` · ${d.lender}` : ""}{d.owner ? ` · ${d.owner}` : ""}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--sp-2)" }}>
+              <h2 className="card-title">
+                {d.description}{d.lender ? ` · ${d.lender}` : ""}{d.owner ? ` · ${d.owner}` : ""}
+              </h2>
+              {!d.linkedToMortgage && (
+                <DeleteChip title={`Verwijder ${d.description}`}
+                  onClick={() => update((s) => ({ ...s, debts: s.debts.filter((x) => x.id !== d.id) }))} />
+              )}
+            </div>
             {d.linkedToMortgage ? (
               <>
                 <div className="row"><span className="row-label">Restschuld<span className="row-sub">automatisch uit Hypotheek</span></span><Money value={state.mortgage.principalRemaining} /></div>
@@ -223,6 +229,13 @@ function Debts({ state }: { state: FinancialState }) {
                   <EditableNumber value={d.principalRemaining} ariaLabel={`Restschuld ${d.description}`}
                     onCommit={(v) => update((s) => ({
                       ...s, debts: s.debts.map((x) => x.id === d.id ? { ...x, principalRemaining: v ?? 0 } : x),
+                    }))} />
+                </div>
+                <div className="row">
+                  <span className="row-label">Rente per jaar (%)</span>
+                  <EditableNumber value={Math.round(d.interestRatePerYear * 10000) / 100} ariaLabel={`Rente ${d.description}`}
+                    onCommit={(v) => update((s) => ({
+                      ...s, debts: s.debts.map((x) => x.id === d.id ? { ...x, interestRatePerYear: Math.max(v ?? 0, 0) / 100 } : x),
                     }))} />
                 </div>
                 <div className="row">
@@ -251,7 +264,172 @@ function Debts({ state }: { state: FinancialState }) {
       </section>
 
       <DebtPlannerCard state={state} />
+
+      <DebtRepayOrInvestCard state={state} />
+
+      <AddDebtCard />
     </>
+  );
+}
+
+/**
+ * Per schuld: extra aflossen of hetzelfde bedrag beleggen? Dé afweging voor
+ * een studieschuld met lage rente — gegarandeerde rentebesparing vs verwacht
+ * (maar onzeker) beleggingsrendement over dezelfde looptijd.
+ */
+function DebtRepayOrInvestCard({ state }: { state: FinancialState }) {
+  const candidates = state.debts.filter((d) => !d.linkedToMortgage && d.principalRemaining > 0);
+  const [debtId, setDebtId] = useState<string | null>(null);
+  const [extra, setExtra] = useState(100);
+  const [rendementPct, setRendementPct] = useState(
+    Math.round(state.forecast.expectedReturnPerYear * 1000) / 10);
+  if (candidates.length === 0) return null;
+  const debt = candidates.find((d) => d.id === debtId) ?? candidates[0];
+  const r = rendementPct / 100;
+  const cmp = debtRepayVsInvest(debt, extra, r);
+  const investWins = cmp.investGrowth > cmp.interestSaved;
+  const rateGap = r - debt.interestRatePerYear;
+  const fmtMonths = (m: number) => (m >= 24 ? `${Math.round(m / 12)} jaar` : `${m} mnd`);
+
+  return (
+    <section className="card" style={{ backgroundColor: "#e3f2fd", borderLeft: "4px solid #1976d2" }}>
+      <h2 className="card-title">Deze schuld aflossen of beleggen?</h2>
+      {candidates.length > 1 && (
+        <select
+          value={debt.id}
+          onChange={(e) => setDebtId(e.target.value)}
+          aria-label="Kies schuld"
+          style={{
+            width: "100%", padding: "10px", marginBottom: "var(--sp-2)",
+            border: "1px solid var(--line)", borderRadius: "var(--radius-sm)",
+            background: "var(--surface)", color: "var(--ink)", fontSize: 16,
+          }}
+        >
+          {candidates.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.description} · {formatEUR(d.principalRemaining)} @ {formatPct(d.interestRatePerYear)}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="row">
+        <span className="row-label">Extra bedrag per maand</span>
+        <EditableNumber value={extra} ariaLabel="Extra bedrag per maand voor deze schuld"
+          onCommit={(v) => setExtra(Math.max(v ?? 0, 0))} />
+      </div>
+      <div className="row">
+        <span className="row-label">Verwacht rendement (%)
+          <span className="row-sub">standaard uit je prognose-aannames</span>
+        </span>
+        <EditableNumber value={rendementPct} ariaLabel="Verwacht rendement in procenten"
+          onCommit={(v) => setRendementPct(Math.max(v ?? 0, 0))} />
+      </div>
+      {cmp.baseMonths == null ? (
+        <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", color: "var(--negative)", fontWeight: 600 }}>
+          Het huidige maandbedrag dekt de rente niet — deze schuld loopt op.
+          Verhoog eerst het maandbedrag; beleggen is dan niet aan de orde.
+        </p>
+      ) : (
+        <>
+          <div className="row">
+            <span className="row-label">🏦 Aflossen: rente bespaard
+              <span className="row-sub">
+                gegarandeerd, tegen {formatPct(debt.interestRatePerYear)} · {cmp.monthsEarlier > 0 ? `${fmtMonths(cmp.monthsEarlier)} eerder klaar` : "zelfde looptijd"}
+              </span>
+            </span>
+            <Money value={cmp.interestSaved} />
+          </div>
+          <div className="row">
+            <span className="row-label">📈 Beleggen: verwachte groei
+              <span className="row-sub">
+                bij {formatPct(r)} over {fmtMonths(cmp.baseMonths)} (de restlooptijd) — niet gegarandeerd
+              </span>
+            </span>
+            <Money value={cmp.investGrowth} />
+          </div>
+          <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+            {investWins
+              ? `📈 Op deze aannames levert beleggen ${formatEUR(cmp.investGrowth - cmp.interestSaved)} meer op dan aflossen — laat de schuld op het minimum doorlopen en beleg het verschil.`
+              : `🏦 Op deze aannames wint extra aflossen (${formatEUR(cmp.interestSaved - cmp.investGrowth)} voordeel) — zeker rendement én eerder schuldenvrij.`}
+          </p>
+          <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-sm)" }}>
+            Vuistregel: de schuldrente ({formatPct(debt.interestRatePerYear)}) is je <em>gegarandeerde</em> rendement
+            bij aflossen; het beleggingsrendement ({formatPct(r)}) is een <em>verwachting</em>.
+            {rateGap > 0.02
+              ? " Bij zo'n groot verschil kiezen de meeste rekenmodellen voor beleggen — mits je tegen de schommelingen kunt."
+              : rateGap < 0
+                ? " De schuldrente is hier hóger dan het verwachte rendement: aflossen is dan vrijwel altijd de betere keuze."
+                : " De marges zijn klein: rust in je hoofd en minder maandlasten wegen dan zwaarder dan het rekensommetje."}
+          </p>
+        </>
+      )}
+      <p style={{ margin: "var(--sp-2) 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Let op: belegd vermogen telt mee in box 3, terwijl een schuld (boven de drempel) je grondslag juist
+        verlaagt — zie de box 3-kaart bij Vermogen. Studieschuldrente is niet aftrekbaar. Vereenvoudigd
+        model, geen financieel advies.
+      </p>
+    </section>
+  );
+}
+
+/** Nieuwe schuld toevoegen — bijv. een studieschuld (DUO), autolening of persoonlijke lening. */
+function AddDebtCard() {
+  const { update } = useSync();
+  const [description, setDescription] = useState("");
+  const [lender, setLender] = useState("");
+  const [saldo, setSaldo] = useState<number | null>(null);
+  const [rente, setRente] = useState<number | null>(null);
+  const [maandbedrag, setMaandbedrag] = useState<number | null>(null);
+
+  const add = () => {
+    if (!description.trim() || !saldo) return;
+    update((s) => ({
+      ...s,
+      debts: [...s.debts, {
+        id: `debt-${Date.now()}`,
+        description: description.trim(),
+        lender: lender.trim() || null,
+        owner: null,
+        principalRemaining: saldo,
+        interestRatePerYear: Math.max(rente ?? 0, 0) / 100,
+        monthlyPayment: maandbedrag ?? 0,
+        remainingTermMonths: null,
+        linkedToMortgage: false,
+        note: null,
+      }],
+    }));
+    setDescription(""); setLender(""); setSaldo(null); setRente(null); setMaandbedrag(null);
+  };
+
+  const inputStyle = {
+    padding: "10px", border: "1px solid var(--line)", borderRadius: "var(--radius-sm)",
+    background: "var(--surface)", color: "var(--ink)", fontSize: 16,
+  } as const;
+
+  return (
+    <section className="card">
+      <h2 className="card-title">Schuld toevoegen</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-2)" }}>
+        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="bijv. Studieschuld" aria-label="Omschrijving schuld"
+          style={{ ...inputStyle, gridColumn: "1 / -1" }} />
+        <input type="text" value={lender} onChange={(e) => setLender(e.target.value)}
+          placeholder="verstrekker (bijv. DUO)" aria-label="Verstrekker" style={inputStyle} />
+        <EditableNumber value={saldo} allowNull ariaLabel="Restschuld"
+          onCommit={setSaldo} />
+        <EditableNumber value={rente} allowNull ariaLabel="Rente per jaar in procenten"
+          onCommit={setRente} />
+        <EditableNumber value={maandbedrag} allowNull ariaLabel="Maandbedrag"
+          onCommit={setMaandbedrag} />
+      </div>
+      <p style={{ margin: "6px 0 0", fontSize: "var(--text-xs)", color: "var(--ink-soft)" }}>
+        Velden: verstrekker · restschuld € · rente % (bijv. 2,56) · maandbedrag €.
+      </p>
+      <button className="btn btn-primary" style={{ marginTop: "var(--sp-2)" }}
+        disabled={!description.trim() || !saldo} onClick={add}>
+        + Toevoegen
+      </button>
+    </section>
   );
 }
 
